@@ -35,6 +35,8 @@ jobs:
 
       - name: Build the web app (Vite)
         run: npm run build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       - name: Sync into the Android project
         run: npx cap sync android
