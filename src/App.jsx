@@ -4,11 +4,12 @@ import { LiveProvider } from './context/LiveContext';
 import { ThemeProvider } from './context/ThemeContext';
 import RequireAuth from './components/RequireAuth';
 import RequireOwner from './components/RequireOwner';
+import RequireService from './components/RequireService';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
-import Repairs from './pages/Repairs';
+import Service from './pages/Service';
 import Sales from './pages/Sales';
 import Reports from './pages/Reports';
 import Liabilities from './pages/Liabilities';
@@ -35,7 +36,7 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="inventory" element={<Inventory />} />
-            <Route path="repairs" element={<Repairs />} />
+            <Route path="service" element={<RequireService><Service /></RequireService>} />
             <Route path="sales" element={<Sales />} />
             <Route path="reports" element={<RequireOwner><Reports /></RequireOwner>} />
             <Route path="liabilities" element={<RequireOwner><Liabilities /></RequireOwner>} />

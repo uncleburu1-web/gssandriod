@@ -11,7 +11,7 @@ const BASE_NAV_ITEMS = [
   { to: '/inventory', label: 'Inventory', mobileLabel: 'Stock', icon: Icons.inventory },
 ];
 
-const REPAIRS_NAV_ITEM = { to: '/repairs', label: 'Service', mobileLabel: 'Service', icon: Icons.repairs };
+const SERVICE_NAV_ITEM = { to: '/service', label: 'Service', mobileLabel: 'Service', icon: Icons.service };
 
 const SALES_NAV_ITEM = { to: '/sales', label: 'Sales', mobileLabel: 'Sales', icon: Icons.sales };
 
@@ -26,15 +26,16 @@ const OWNER_NAV_ITEMS = [
 ];
 
 export default function Layout() {
-  const { user, logout, isOwner, isCeo, shopName, repairsEnabled } = useAuth();
+  const { user, logout, isOwner, isCeo, shopName, serviceEnabled } = useAuth();
   const { status: liveStatus, versions } = useLive();
   const { theme, toggleTheme } = useTheme();
-  // Repairs only makes sense for businesses that actually fix devices —
-  // a clothing or general retail shop never sees the tab at all, rather
-  // than seeing an empty/irrelevant section. Driven entirely by what the
-  // owner picked at signup (Organization.business_type on the backend).
-  const coreItems = repairsEnabled
-    ? [...BASE_NAV_ITEMS, REPAIRS_NAV_ITEM, SALES_NAV_ITEM, PRINTER_NAV_ITEM]
+  // Service (device repair/servicing) only makes sense for businesses that
+  // actually fix devices — a clothing or general retail shop never sees
+  // the tab at all, rather than seeing an empty/irrelevant section. Driven
+  // entirely by what the owner picked at signup (Organization.business_type
+  // on the backend).
+  const coreItems = serviceEnabled
+    ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, PRINTER_NAV_ITEM]
     : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, PRINTER_NAV_ITEM];
   const items = isOwner ? [...coreItems, ...OWNER_NAV_ITEMS] : coreItems;
 

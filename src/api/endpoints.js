@@ -46,12 +46,14 @@ export const suppliers = {
   remove: (id) => client.delete(`/suppliers/${id}/`),
 };
 
-export const repairs = {
-  list: (params) => client.get('/repairs/tickets/', { params }),
-  create: (data) => client.post('/repairs/tickets/', data),
-  update: (id, data) => client.patch(`/repairs/tickets/${id}/`, data),
-  remove: (id) => client.delete(`/repairs/tickets/${id}/`),
-  addPayment: (id, amount) => client.post(`/repairs/tickets/${id}/add-payment/`, { amount }),
+export const service = {
+  list: (params) => client.get('/service/tickets/', { params }),
+  create: (data) => client.post('/service/tickets/', data),
+  update: (id, data) => client.patch(`/service/tickets/${id}/`, data),
+  remove: (id) => client.delete(`/service/tickets/${id}/`),
+  addPayment: (id, amount) => client.post(`/service/tickets/${id}/add-payment/`, { amount }),
+  addPart: (id, item, quantity) => client.post(`/service/tickets/${id}/add-part/`, { item, quantity }),
+  removePart: (id, part) => client.post(`/service/tickets/${id}/remove-part/`, { part }),
 };
 
 export const sales = {

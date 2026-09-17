@@ -5,11 +5,23 @@ import { useLive } from '../context/LiveContext';
 import { money, fmtDate, apiErrorMessage } from '../utils/format';
 import { Icons } from '../components/Icons';
 
-const emptyItemForm = { name: '', short_code: '', category: 'laptop', brand: '', unit: 'PIECE', spec: '', min_stock: 2 };
+// One shared category list (matches inventory/models.py CATEGORY_CHOICES on
+// the backend) — never hidden per business type, since a shop can genuinely
+// stock a mixed catalog, but reordered so the relevant group shows first
+// depending on what the organization actually sells.
+const CATEGORY_LABEL = {
+  laptop: 'Laptop', part: 'Part', accessory: 'Accessory', consumable: 'Consumable',
+  medicine: 'Medicine / Drug', tablet_capsule: 'Tablet / Capsule', syrup_liquid: 'Syrup / Liquid',
+  injection: 'Injection', medical_supply: 'Medical supply', equipment: 'Equipment', other: 'Other',
+};
+const GADGET_CATEGORIES = ['laptop', 'part', 'accessory', 'consumable'];
+const PHARMACY_CATEGORIES = ['medicine', 'tablet_capsule', 'syrup_liquid', 'injection', 'medical_supply', 'equipment'];
+
+const emptyItemForm = { name: '', short_code: '', category: 'laptop', brand: '', unit: 'PIECE', spec: '', min_stock: 2, prescription_required: false };
 const emptyBatchForm = { batch_number: '', quantity_received: '', cost_price: '', selling_price: '', expiry_date: '', supplier_name: '' };
 
 export default function Inventory() {
-  const { isOwner } = useAuth();
+  const { isOwner, pharmacyEnabled } = useAuth();
   const { versions } = useLive();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +61,7 @@ export default function Inventory() {
 
   function openAddItem() {
     setEditingItem(null);
-    setItemForm(emptyItemForm);
+    setItemForm({ ...emptyItemForm, category: pharmacyEnabled ? 'medicine' : 'laptop' });
     setError('');
     setItemModalOpen(true);
   }
@@ -184,7 +196,8 @@ export default function Inventory() {
                         {i.is_low_stock && <span className="badge diagnosing" style={{ marginLeft: 8 }}><span className="ledot" />Low stock</span>}
                       </div>
                       <div className="stock-card-sub mono">
-                        {i.name}{i.spec ? ` · ${i.spec}` : ''} · {i.category}
+                        {i.name}{i.spec ? ` · ${i.spec}` : ''} · {CATEGORY_LABEL[i.category] || i.category}
+                        {i.prescription_required && <span style={{ marginLeft: 6 }}>℞</span>}
                       </div>
                     </div>
                     <div className="stock-card-figures">
@@ -281,10 +294,9 @@ export default function Inventory() {
                 <div className="field">
                   <label>Category</label>
                   <select value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}>
-                    <option value="laptop">Laptop</option>
-                    <option value="part">Part</option>
-                    <option value="accessory">Accessory</option>
-                    <option value="consumable">Consumable</option>
+                    {(pharmacyEnabled ? [...PHARMACY_CATEGORIES, ...GADGET_CATEGORIES] : [...GADGET_CATEGORIES, ...PHARMACY_CATEGORIES]).map((c) => (
+                      <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>
+                    ))}
                     <option value="other">Other</option>
                   </select>
                 </div>
@@ -303,6 +315,18 @@ export default function Inventory() {
                   <input required type="number" min="0" value={itemForm.min_stock} onChange={(e) => setItemForm({ ...itemForm, min_stock: e.target.value })} />
                 </div>
               </div>
+              {pharmacyEnabled && (
+                <div className="field">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!itemForm.prescription_required}
+                      onChange={(e) => setItemForm({ ...itemForm, prescription_required: e.target.checked })}
+                    />
+                    Prescription required (℞) — can't be sold without one
+                  </label>
+                </div>
+              )}
               <div className="modal-actions">
                 <button type="button" className="btn ghost" onClick={() => setItemModalOpen(false)}>Cancel</button>
                 <button type="submit" className="btn">{editingItem ? 'Save changes' : 'Add item'}</button>

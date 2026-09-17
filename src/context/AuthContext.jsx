@@ -54,7 +54,8 @@ export function AuthProvider({ children }) {
       shopId: user?.shop_id || null,
       shopName: user?.shop_name || 'My Shop',
       shopLogoUrl: user?.shop_logo_url || '',
-      repairsEnabled: !!user?.repairs_enabled,
+      serviceEnabled: !!user?.service_enabled,
+      pharmacyEnabled: !!user?.pharmacy_enabled,
       refreshUser: async () => { const me = await auth.me(); setUser(me.data); },
     }}>
       {children}
