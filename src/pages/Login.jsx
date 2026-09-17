@@ -27,7 +27,7 @@ export default function Login() {
   return (
     <div className="login-screen">
       <div className="login-card">
-        <div className="brand"><span className="dot" />EVERYDAY WINE STORE</div>
+        <div className="brand"><span className="dot" />GSS POS SOFTWARE SOLUTIONS</div>
         <div className="login-sub">Sign in to manage stock, service jobs, and sales</div>
         {error && <div className="form-error">{error}</div>}
         <form onSubmit={handleSubmit}>

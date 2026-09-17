@@ -15,6 +15,7 @@ import Liabilities from './pages/Liabilities';
 import Workers from './pages/Workers';
 import Billing from './pages/Billing';
 import PrinterSetup from './pages/PrinterSetup';
+import Settings from './pages/Settings';
 
 export default function App() {
   return (
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="workers" element={<RequireOwner><Workers /></RequireOwner>} />
             <Route path="billing" element={<RequireOwner><Billing /></RequireOwner>} />
             <Route path="printer-setup" element={<PrinterSetup />} />
+            <Route path="settings" element={<RequireOwner><Settings /></RequireOwner>} />
           </Route>
         </Routes>
       </LiveProvider>

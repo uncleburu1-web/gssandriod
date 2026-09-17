@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { reports } from '../api/endpoints';
 import { useAuth } from '../context/AuthContext';
 import { money } from '../utils/format';
+import Amount from '../components/Amount';
 import { exportElementAsPdf } from '../utils/pdfExport';
 import { Icons } from '../components/Icons';
 
@@ -161,10 +162,10 @@ function SummaryReport({ data }) {
   return (
     <>
       <div className="stat-grid">
-        <div className="stat-card"><div className="stat-label">Total sales</div><div className="stat-value mono">{money(data.total_sales)}</div></div>
-        <div className="stat-card"><div className="stat-label">Product sales</div><div className="stat-value mono">{money(data.product_sales)}</div></div>
-        <div className="stat-card"><div className="stat-label">Service revenue</div><div className="stat-value mono good">{money(data.service_revenue)}</div></div>
-        <div className="stat-card"><div className="stat-label">Gross profit</div><div className="stat-value mono good">{money(data.gross_profit)}</div></div>
+        <div className="stat-card"><div className="stat-label">Total sales</div><Amount className="stat-value mono" value={data.total_sales} /></div>
+        <div className="stat-card"><div className="stat-label">Product sales</div><Amount className="stat-value mono" value={data.product_sales} /></div>
+        <div className="stat-card"><div className="stat-label">Service revenue</div><Amount className="stat-value mono good" value={data.service_revenue} /></div>
+        <div className="stat-card"><div className="stat-label">Gross profit</div><Amount className="stat-value mono good" value={data.gross_profit} /></div>
       </div>
       <div className="stat-grid cols-2">
         <div className="stat-card"><div className="stat-label">Number of sales</div><div className="stat-value mono">{data.number_of_sales}</div></div>
@@ -288,7 +289,7 @@ function TaxReport({ data }) {
     <>
       <div className="stat-card" style={{ marginBottom: 16, maxWidth: 260 }}>
         <div className="stat-label">Total tax collected</div>
-        <div className="stat-value mono">{money(data.total_tax_collected)}</div>
+        <Amount className="stat-value mono" value={data.total_tax_collected} />
       </div>
       {data.rows.length === 0 ? <div className="empty">No sales in this period.</div> : (
         <div style={{ overflowX: 'auto' }}>
@@ -332,9 +333,9 @@ function ValuationReport({ data }) {
   return (
     <>
       <div className="stat-grid">
-        <div className="stat-card"><div className="stat-label">Total inventory value</div><div className="stat-value mono">{money(data.total_inventory_value)}</div></div>
-        <div className="stat-card"><div className="stat-label">Total selling price value</div><div className="stat-value mono">{money(data.total_selling_price_value)}</div></div>
-        <div className="stat-card"><div className="stat-label">Potential profit</div><div className="stat-value mono good">{money(data.potential_profit)}</div></div>
+        <div className="stat-card"><div className="stat-label">Total inventory value</div><Amount className="stat-value mono" value={data.total_inventory_value} /></div>
+        <div className="stat-card"><div className="stat-label">Total selling price value</div><Amount className="stat-value mono" value={data.total_selling_price_value} /></div>
+        <div className="stat-card"><div className="stat-label">Potential profit</div><Amount className="stat-value mono good" value={data.potential_profit} /></div>
         <div className="stat-card"><div className="stat-label">Margin</div><div className="stat-value mono">{data.margin}%</div></div>
       </div>
       {data.rows.length === 0 ? <div className="empty">No inventory yet.</div> : (

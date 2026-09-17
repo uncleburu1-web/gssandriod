@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { liabilities, reports } from '../api/endpoints';
 import { money, fmtDate } from '../utils/format';
+import Amount from '../components/Amount';
 import { Icons } from '../components/Icons';
 
 const CATEGORY_LABEL = {
@@ -76,13 +77,15 @@ export default function Liabilities() {
           <div className="section-head"><h3>Net worth & risk</h3></div>
           <div className="section-body" style={{ paddingTop: 16 }}>
             <div className="stat-grid">
-              <div className="stat-card"><div className="stat-label">Assets (stock + receivables)</div><div className="stat-value mono">{money(netWorth.assets)}</div></div>
-              <div className="stat-card"><div className="stat-label">Liabilities (pending)</div><div className="stat-value mono warn">{money(netWorth.liabilities)}</div></div>
+              <div className="stat-card"><div className="stat-label">Assets (stock + receivables)</div><Amount className="stat-value mono" value={netWorth.assets} /></div>
+              <div className="stat-card"><div className="stat-label">Liabilities (pending)</div><Amount className="stat-value mono warn" value={netWorth.liabilities} /></div>
               <div className="stat-card">
                 <div className="stat-label">Net worth</div>
-                <div className={`stat-value mono ${netWorth.net_worth >= 0 ? 'good' : ''}`} style={netWorth.net_worth < 0 ? { color: 'var(--danger)' } : undefined}>
-                  {money(netWorth.net_worth)}
-                </div>
+                <Amount
+                  className={`stat-value mono ${netWorth.net_worth >= 0 ? 'good' : ''}`}
+                  style={netWorth.net_worth < 0 ? { color: 'var(--danger)' } : undefined}
+                  value={netWorth.net_worth}
+                />
               </div>
               <div className="stat-card">
                 <div className="stat-label">Risk level</div>

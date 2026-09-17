@@ -3,6 +3,7 @@ import { dashboard, inventory } from '../api/endpoints';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
 import { money, fmtDateTime, apiErrorMessage } from '../utils/format';
+import Amount from '../components/Amount';
 
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
@@ -81,13 +82,13 @@ export default function Dashboard() {
       <div className="stat-grid">
         <div className="stat-card">
           <div className="stat-label">Today's product sales</div>
-          <div className="stat-value mono">{money(stats.today_revenue)}</div>
+          <Amount className="stat-value mono" value={stats.today_revenue} />
         </div>
         {repairsEnabled && (
           <>
             <div className="stat-card">
               <div className="stat-label">Service revenue (today)</div>
-              <div className="stat-value mono good">{money(stats.service_revenue_today)}</div>
+              <Amount className="stat-value mono good" value={stats.service_revenue_today} />
             </div>
             <div className="stat-card">
               <div className="stat-label">Active service tickets</div>

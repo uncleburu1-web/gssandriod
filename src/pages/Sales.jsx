@@ -3,6 +3,7 @@ import { sales, inventory } from '../api/endpoints';
 import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
 import { money, fmtDate, apiErrorMessage } from '../utils/format';
+import Amount from '../components/Amount';
 import { printSaleReceipt } from '../utils/receipt';
 import { Icons } from '../components/Icons';
 
@@ -536,8 +537,8 @@ function SalesHistory({ tab }) {
             {replaceResult ? (
               <div>
                 <div className="stat-grid cols-2" style={{ marginBottom: 14 }}>
-                  <div className="stat-card"><div className="stat-label">Old total</div><div className="stat-value mono">{money(replaceResult.old_total)}</div></div>
-                  <div className="stat-card"><div className="stat-label">New total</div><div className="stat-value mono">{money(replaceResult.new_total)}</div></div>
+                  <div className="stat-card"><div className="stat-label">Old total</div><Amount className="stat-value mono" value={replaceResult.old_total} /></div>
+                  <div className="stat-card"><div className="stat-label">New total</div><Amount className="stat-value mono" value={replaceResult.new_total} /></div>
                 </div>
                 {replaceResult.balance === 0 ? (
                   <div className="form-error" style={{ background: 'rgba(95,191,143,.12)', borderColor: 'var(--good)', color: 'var(--good)' }}>
