@@ -36,7 +36,7 @@ jobs:
       - name: Build the web app (Vite)
         run: npm run build
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_API_URL: https://gss-production.up.railway.app/api
 
       - name: Sync into the Android project
         run: npx cap sync android
