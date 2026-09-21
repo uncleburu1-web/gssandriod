@@ -28,15 +28,22 @@ export const dashboard = {
 export const inventory = {
   list: (params) => client.get('/inventory/items/', { params }),
   get: (id) => client.get(`/inventory/items/${id}/`),
+  byBarcode: (code) => client.get('/inventory/items/by-barcode/', { params: { code } }),
   create: (data) => client.post('/inventory/items/', data),
   update: (id, data) => client.patch(`/inventory/items/${id}/`, data),
   remove: (id) => client.delete(`/inventory/items/${id}/`),
   addBatch: (id, data) => client.post(`/inventory/items/${id}/batches/`, data),
+  addVariant: (id, data) => client.post(`/inventory/items/${id}/variants/`, data),
 };
 
 export const batches = {
   update: (id, data) => client.patch(`/inventory/batches/${id}/`, data),
   remove: (id) => client.delete(`/inventory/batches/${id}/`),
+};
+
+export const variants = {
+  update: (id, data) => client.patch(`/inventory/variants/${id}/`, data),
+  remove: (id) => client.delete(`/inventory/variants/${id}/`),
 };
 
 export const suppliers = {
@@ -46,12 +53,14 @@ export const suppliers = {
   remove: (id) => client.delete(`/suppliers/${id}/`),
 };
 
-export const repairs = {
-  list: (params) => client.get('/repairs/tickets/', { params }),
-  create: (data) => client.post('/repairs/tickets/', data),
-  update: (id, data) => client.patch(`/repairs/tickets/${id}/`, data),
-  remove: (id) => client.delete(`/repairs/tickets/${id}/`),
-  addPayment: (id, amount) => client.post(`/repairs/tickets/${id}/add-payment/`, { amount }),
+export const service = {
+  list: (params) => client.get('/service/tickets/', { params }),
+  create: (data) => client.post('/service/tickets/', data),
+  update: (id, data) => client.patch(`/service/tickets/${id}/`, data),
+  remove: (id) => client.delete(`/service/tickets/${id}/`),
+  addPayment: (id, amount) => client.post(`/service/tickets/${id}/add-payment/`, { amount }),
+  addPart: (id, item, quantity) => client.post(`/service/tickets/${id}/add-part/`, { item, quantity }),
+  removePart: (id, part) => client.post(`/service/tickets/${id}/remove-part/`, { part }),
 };
 
 export const sales = {
@@ -78,7 +87,7 @@ export const liabilities = {
 
 export const subscription = {
   status: () => client.get('/subscription/status/'),
-  checkout: (callback_url) => client.post('/subscription/checkout/', { callback_url }),
+  checkout: (callback_url, billing_cycle) => client.post('/subscription/checkout/', { callback_url, billing_cycle }),
   verify: (reference) => client.get('/subscription/verify/', { params: { reference } }),
 };
 

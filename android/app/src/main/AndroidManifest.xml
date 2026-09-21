@@ -33,11 +33,23 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Barcode scanning (@capacitor-mlkit/barcode-scanning): tells Play
+             Services which ML Kit model to bundle so the scanner works the
+             first time, without a separate on-demand download. -->
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Barcode scanning: the camera to scan, the flashlight to help in a
+         dim stockroom. Requested at scan time, not app install/launch. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
 
     <!-- Bluetooth: connecting to an already-paired thermal printer (SPP).
          Legacy permissions cover Android up to 11 (API 30); BLUETOOTH_CONNECT

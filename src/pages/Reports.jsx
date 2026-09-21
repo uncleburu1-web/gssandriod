@@ -3,7 +3,7 @@ import { reports } from '../api/endpoints';
 import { useAuth } from '../context/AuthContext';
 import { money } from '../utils/format';
 import Amount from '../components/Amount';
-import { exportElementAsPdf } from '../utils/pdfExport';
+import { exportReportPdf } from '../utils/reportPdf';
 import { Icons } from '../components/Icons';
 
 const REPORT_TABS = [
@@ -26,8 +26,18 @@ function thisMonthISO() {
   return new Date().toISOString().slice(0, 7);
 }
 
+function shopInfoFrom(user) {
+  return {
+    name: user?.shop_name,
+    address: user?.shop_address,
+    phone: user?.shop_phone,
+    email: user?.shop_email,
+  };
+}
+
 export default function Reports() {
-  const { shopName } = useAuth();
+  const { user, shopName } = useAuth();
+  const shopInfo = shopInfoFrom(user);
   const [tab, setTab] = useState('summary');
   const [periodMode, setPeriodMode] = useState('day'); // 'day' | 'month'
   const [date, setDate] = useState(todayISO());
@@ -77,7 +87,11 @@ export default function Reports() {
     setExporting(true);
     try {
       const fileName = `${(shopName || 'report').replace(/[^a-z0-9]+/gi, '-')}-${activeTabLabel.replace(/[^a-z0-9]+/gi, '-')}-${periodLabel || todayISO()}`;
-      await exportElementAsPdf('report-print-area', fileName);
+      // Same defensive normalization renderReport() applies on screen —
+      // guarantees rows/series are always arrays so a stale/unexpected
+      // response shape can't crash the export either.
+      const normalized = { rows: [], series: [], product_sales: 0, service_revenue: 0, ...data };
+      await exportReportPdf({ tab, tabLabel: activeTabLabel, data: normalized, shop: shopInfo, periodLabel, fileNameBase: fileName });
     } catch (err) {
       alert(`Could not create the PDF: ${err.message || err}`);
     } finally {
@@ -97,17 +111,7 @@ export default function Reports() {
         </button>
       </div>
 
-      <div id="report-print-area">
-        {/* Only visible in the exported PDF / a real browser print (theme.css)
-            — the screen chrome (sidebar, tabs, period picker) doesn't belong
-            on paper, so this is what carries the context instead: which
-            report, which period, and when it was pulled. */}
-        <div className="report-print-header">
-          <div className="report-print-shop">{shopName}</div>
-          <div className="report-print-title">{activeTabLabel}{periodLabel ? ` — ${periodLabel}` : ''}</div>
-          <div className="report-print-meta">Printed {new Date().toLocaleString()}</div>
-        </div>
-
+      <div>
         <div className="report-nav">
           {REPORT_TABS.map((t) => (
             <button key={t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>{t.label}</button>

@@ -148,6 +148,7 @@ tr:last-child td{border-bottom:none;}
 .banner{padding:11px 14px;border-radius:var(--radius);font-size:12.5px;display:flex;align-items:center;gap:8px;}
 .banner.good{background:rgba(95,191,143,.12);border:1px solid var(--good);color:var(--good);}
 .banner.warn{background:rgba(232,162,60,.12);border:1px solid var(--warn);color:var(--warn);}
+.banner.danger{background:rgba(226,100,92,.12);border:1px solid var(--danger);color:var(--danger);}
 .banner.info{background:rgba(79,163,227,.12);border:1px solid var(--accent);color:var(--accent);}
 
 .field-hint{font-size:11px;color:var(--text-dim);margin-top:5px;}
@@ -404,39 +405,3 @@ tr:last-child td{border-bottom:none;}
   .pos-grid{max-height:none;}
 }
 
-/* --- Report printing ----------------------------------------------------
-   The print header is invisible on screen (theme.css shows it in a real
-   layout for print/print-preview only); in print media the app chrome
-   (sidebar, topbar incl. the Print button itself, tab strip, period
-   picker) is hidden so only the report content + this header goes to
-   paper, on a plain white background regardless of the dark/light theme
-   toggle currently selected on screen. */
-.report-print-header{display:none;}
-@media print{
-  .sidebar, .topbar, .report-nav, .period-picker{display:none !important;}
-  .content{padding:0 !important;background:#fff !important;}
-  body{background:#fff !important;}
-  .report-print-header{
-    display:block;margin-bottom:18px;padding-bottom:10px;border-bottom:2px solid #000;color:#000;
-  }
-  .report-print-shop{font-family:'JetBrains Mono',monospace;font-size:18px;font-weight:700;}
-  .report-print-title{font-size:14px;margin-top:2px;}
-  .report-print-meta{font-size:11px;color:#555;margin-top:2px;}
-  .section, .stat-card, table, th, td{background:#fff !important;color:#000;border-color:#ccc !important;}
-}
-/* Mirrors the @media print block above, but toggled by JS (utils/pdfExport.js
-   adds/removes this class on <body>) instead of an actual print media query —
-   Android's WebView has no working window.print(), so reports there render a
-   PDF from a snapshot of this same DOM instead. Kept as a exact duplicate
-   rather than merging the two: browser print and this snapshot fire at
-   different times for different reasons, and editing print styles later
-   shouldn't have to remember this also needs updating in lockstep. */
-body.exporting-pdf .sidebar, body.exporting-pdf .topbar, body.exporting-pdf .report-nav, body.exporting-pdf .period-picker{display:none !important;}
-body.exporting-pdf .content{padding:0 !important;background:#fff !important;}
-body.exporting-pdf{background:#fff !important;}
-body.exporting-pdf .report-print-header{
-  display:block;margin-bottom:18px;padding-bottom:10px;border-bottom:2px solid #000;color:#000;
-}
-body.exporting-pdf .section, body.exporting-pdf .stat-card, body.exporting-pdf table, body.exporting-pdf th, body.exporting-pdf td{
-  background:#fff !important;color:#000;border-color:#ccc !important;
-}

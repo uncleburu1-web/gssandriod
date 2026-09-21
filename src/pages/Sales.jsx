@@ -6,6 +6,7 @@ import { money, fmtDate, apiErrorMessage } from '../utils/format';
 import Amount from '../components/Amount';
 import { printSaleReceipt } from '../utils/receipt';
 import { Icons } from '../components/Icons';
+import { scanBarcode } from '../utils/barcodeScanner';
 
 function shopInfoFrom(user) {
   return {
@@ -18,16 +19,18 @@ function shopInfoFrom(user) {
   };
 }
 
-function newLine(item) {
+function newLine(item, variant) {
   return {
-    key: item ? `stock-${item.id}` : `custom-${Date.now()}-${Math.random()}`,
+    key: item ? (variant ? `stock-${item.id}-${variant.id}` : `stock-${item.id}`) : `custom-${Date.now()}-${Math.random()}`,
     item: item ? item.id : null,
+    variant: variant ? variant.id : null,
     item_name: item ? item.name : '',
+    variant_label: variant ? variant.label : '',
     category: item ? item.category : '',
     quantity: 1,
     unit_price: item ? Number(item.sell_price) : 0,
     unit_cost: item ? Number(item.cost_price) : 0,
-    maxQty: item ? item.quantity : null,
+    maxQty: variant ? variant.quantity : (item ? item.quantity : null),
   };
 }
 
@@ -110,9 +113,10 @@ function PosScreen({ onDone }) {
   const subtotal = cart.reduce((sum, l) => sum + l.quantity * Number(l.unit_price || 0), 0);
   const cartCount = cart.reduce((n, l) => n + l.quantity, 0);
 
-  function addItem(item) {
+  function addItem(item, variant) {
+    const key = variant ? `stock-${item.id}-${variant.id}` : `stock-${item.id}`;
     setCart((prev) => {
-      const idx = prev.findIndex((l) => l.item === item.id);
+      const idx = prev.findIndex((l) => l.key === key);
       if (idx >= 0) {
         const existing = prev[idx];
         if (existing.maxQty != null && existing.quantity >= existing.maxQty) return prev;
@@ -120,8 +124,33 @@ function PosScreen({ onDone }) {
         copy[idx] = { ...existing, quantity: existing.quantity + 1 };
         return copy;
       }
-      return [...prev, newLine(item)];
+      return [...prev, newLine(item, variant)];
     });
+  }
+
+  // Items with sizes/colors can't just be tapped straight into the cart —
+  // stock is tracked per variant (see inventory.ItemVariant on the
+  // backend), so which one is being sold has to be picked first. The
+  // list view's `has_variants` flag is enough to gate on; the actual
+  // variants + their own stock only come from the item's detail endpoint.
+  const [variantPicker, setVariantPicker] = useState(null); // { item, variants } | null
+  const [variantPickerLoading, setVariantPickerLoading] = useState(false);
+
+  function handleProductTap(item) {
+    if (!item.has_variants) {
+      addItem(item);
+      return;
+    }
+    setVariantPickerLoading(true);
+    inventory.get(item.id).then(({ data }) => {
+      setVariantPicker({ item, variants: data.variants || [] });
+      setVariantPickerLoading(false);
+    });
+  }
+
+  function pickVariant(variant) {
+    addItem(variantPicker.item, variant);
+    setVariantPicker(null);
   }
 
   // A barcode scanner is just a keyboard that types fast and hits Enter —
@@ -143,15 +172,36 @@ function PosScreen({ onDone }) {
     if (e.key !== 'Enter') return;
     const code = search.trim();
     if (!code) return;
-    const hit = catalog.find((i) => i.barcode && i.barcode === code);
-    if (hit) {
-      addItem(hit);
-      setScanFeedback({ type: 'ok', message: `Added ${hit.name}` });
-      setSearch('');
-    } else {
+    processScannedCode(code);
+    setSearch('');
+  }
+
+  // The single source of truth for "a barcode was read, now do something
+  // with it" — shared by the keyboard-wedge path above (a hardware
+  // scanner types the code and hits Enter) and the camera-scan button
+  // below. Looked up via the backend's exact-match endpoint rather than
+  // searched for in the in-memory `catalog`, which only holds this
+  // shop's first page of products — a scan for anything past that page
+  // would otherwise report "no such product" even though it exists.
+  async function processScannedCode(code) {
+    try {
+      const { data: hit } = await inventory.byBarcode(code);
+      handleProductTap(hit);
+      setScanFeedback({ type: 'ok', message: hit.has_variants ? `Pick a size/color for ${hit.name}` : `Added ${hit.name}` });
+    } catch (err) {
       setScanFeedback({ type: 'error', message: `No product with barcode "${code}"` });
+    } finally {
+      searchRef.current?.focus();
     }
-    searchRef.current?.focus();
+  }
+
+  async function handleCameraScan() {
+    try {
+      const code = await scanBarcode();
+      if (code) processScannedCode(code);
+    } catch (err) {
+      setScanFeedback({ type: 'error', message: err.message || 'Could not open the camera scanner.' });
+    }
   }
 
   function addCustom() {
@@ -193,6 +243,8 @@ function PosScreen({ onDone }) {
         status: installment ? 'outstanding' : 'completed',
         items: cart.map((l) => ({
           item: l.item,
+          variant: l.variant,
+          variant_label: l.variant_label,
           item_name: l.item_name,
           category: l.category,
           quantity: l.quantity,
@@ -220,8 +272,20 @@ function PosScreen({ onDone }) {
     <div className="pos-layout">
       <div className="pos-catalog">
         <div className="pos-search">
-          <input placeholder="Search products…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input
+            ref={searchRef}
+            placeholder="Search products, or scan a barcode…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+          />
+          <button type="button" className="btn ghost" onClick={handleCameraScan} title="Scan with camera">{Icons.scan}</button>
         </div>
+        {scanFeedback && (
+          <div className={`banner ${scanFeedback.type === 'ok' ? 'good' : 'danger'}`} style={{ marginBottom: 12 }}>
+            {scanFeedback.message}
+          </div>
+        )}
         <div className="pos-chips">
           <button className={`pos-chip ${category === 'all' ? 'active' : ''}`} onClick={() => setCategory('all')}>All</button>
           {categories.map((c) => (
@@ -241,19 +305,22 @@ function PosScreen({ onDone }) {
           {loadingCatalog ? (
             <div className="empty">Loading…</div>
           ) : filtered.map((item) => {
-            const inCartQty = cart.find((l) => l.item === item.id)?.quantity || 0;
-            const outOfStock = item.quantity <= 0;
-            const atLimit = item.quantity != null && inCartQty >= item.quantity;
+            const inCartQty = cart.filter((l) => l.item === item.id).reduce((s, l) => s + l.quantity, 0);
+            // A variant item's real availability is per size/color, not
+            // this total — so it's never disabled here; the picker below
+            // shows (and enforces) each variant's own stock instead.
+            const outOfStock = !item.has_variants && item.quantity <= 0;
+            const atLimit = !item.has_variants && item.quantity != null && inCartQty >= item.quantity;
             return (
               <button
                 key={item.id}
                 className={`pos-tile ${item.is_low_stock ? 'pos-tile-low' : ''}`}
                 disabled={outOfStock || atLimit}
-                onClick={() => addItem(item)}
+                onClick={() => handleProductTap(item)}
               >
                 <div className="pos-tile-name">{item.short_code || item.name}</div>
                 <div className="pos-tile-stock">
-                  {outOfStock ? 'Out of stock' : `${item.quantity} in stock`}
+                  {item.has_variants ? `${item.quantity} in stock (sizes/colors)` : outOfStock ? 'Out of stock' : `${item.quantity} in stock`}
                   {inCartQty ? ` · ${inCartQty} in cart` : ''}
                 </div>
                 <div className="pos-tile-price num">{money(item.sell_price)}</div>
@@ -277,7 +344,9 @@ function PosScreen({ onDone }) {
           ) : cart.map((l) => (
             <div className="cart-line" key={l.key}>
               <div className="cart-line-info">
-                <div className="cart-line-name" title={l.item_name}>{l.item_name}</div>
+                <div className="cart-line-name" title={l.item_name}>
+                  {l.item_name}{l.variant_label ? ` — ${l.variant_label}` : ''}
+                </div>
                 <div className="cart-line-price">
                   ₦<input type="number" value={l.unit_price} onChange={(e) => updatePrice(l.key, e.target.value)} /> each
                 </div>
@@ -341,6 +410,43 @@ function PosScreen({ onDone }) {
           </div>
         </div>
       )}
+
+      {(variantPicker || variantPickerLoading) && (
+        <div className="modal-backdrop" onClick={() => setVariantPicker(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{variantPicker ? `Which one? — ${variantPicker.item.short_code || variantPicker.item.name}` : 'Loading…'}</h3>
+            {variantPickerLoading ? (
+              <div className="empty">Loading sizes/colors…</div>
+            ) : variantPicker.variants.length === 0 ? (
+              <div className="empty">This item has no variants set up yet.</div>
+            ) : (
+              <div className="pos-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
+                {variantPicker.variants.map((v) => {
+                  const out = v.quantity <= 0;
+                  const inCartQty = cart.find((l) => l.key === `stock-${variantPicker.item.id}-${v.id}`)?.quantity || 0;
+                  return (
+                    <button
+                      key={v.id}
+                      className={`pos-tile ${v.is_low_stock ? 'pos-tile-low' : ''}`}
+                      disabled={out || inCartQty >= v.quantity}
+                      onClick={() => pickVariant(v)}
+                    >
+                      <div className="pos-tile-name">{v.label}</div>
+                      <div className="pos-tile-stock">
+                        {out ? 'Out of stock' : `${v.quantity} in stock`}
+                        {inCartQty ? ` · ${inCartQty} in cart` : ''}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="modal-actions">
+              <button type="button" className="btn ghost" onClick={() => setVariantPicker(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -364,7 +470,8 @@ function SalesHistory({ tab }) {
 
   const [replaceModal, setReplaceModal] = useState(null);
   const [replaceLine, setReplaceLine] = useState('');
-  const [replaceForm, setReplaceForm] = useState({ item: '', item_name: '', quantity: 1, unit_price: 0, unit_cost: 0 });
+  const [replaceForm, setReplaceForm] = useState({ item: '', variant: '', item_name: '', quantity: 1, unit_price: 0, unit_cost: 0 });
+  const [replaceVariants, setReplaceVariants] = useState([]);
   const [replaceError, setReplaceError] = useState('');
   const [replaceResult, setReplaceResult] = useState(null);
   const [catalog, setCatalog] = useState([]);
@@ -413,7 +520,8 @@ function SalesHistory({ tab }) {
   function openReplace(sale) {
     setReplaceModal(sale);
     setReplaceLine(sale.items.length === 1 ? sale.items[0].id : '');
-    setReplaceForm({ item: '', item_name: '', quantity: 1, unit_price: 0, unit_cost: 0 });
+    setReplaceForm({ item: '', variant: '', item_name: '', quantity: 1, unit_price: 0, unit_cost: 0 });
+    setReplaceVariants([]);
     setReplaceError('');
     setReplaceResult(null);
     inventory.list().then(({ data }) => setCatalog(data.results || data));
@@ -422,9 +530,15 @@ function SalesHistory({ tab }) {
   function handleReplacePickItem(id) {
     const item = catalog.find((i) => String(i.id) === String(id));
     if (item) {
-      setReplaceForm({ ...replaceForm, item: id, item_name: item.name, unit_price: item.sell_price, unit_cost: item.cost_price });
+      setReplaceForm({ ...replaceForm, item: id, variant: '', item_name: item.name, unit_price: item.sell_price, unit_cost: item.cost_price });
+      if (item.has_variants) {
+        inventory.get(id).then(({ data }) => setReplaceVariants(data.variants || []));
+      } else {
+        setReplaceVariants([]);
+      }
     } else {
-      setReplaceForm({ ...replaceForm, item: '' });
+      setReplaceForm({ ...replaceForm, item: '', variant: '' });
+      setReplaceVariants([]);
     }
   }
 
@@ -436,7 +550,7 @@ function SalesHistory({ tab }) {
       return;
     }
     try {
-      const payload = { ...replaceForm, item: replaceForm.item || null, sale_item: replaceLine };
+      const payload = { ...replaceForm, item: replaceForm.item || null, variant: replaceForm.variant || null, sale_item: replaceLine };
       const { data } = await sales.replaceItem(replaceModal.id, payload);
       setReplaceResult({ old_total: data.old_total, new_total: data.new_total, balance: data.balance });
       load();
@@ -579,6 +693,17 @@ function SalesHistory({ tab }) {
                     ))}
                   </select>
                 </div>
+                {replaceVariants.length > 0 && (
+                  <div className="field">
+                    <label>Variant (size/color)</label>
+                    <select required value={replaceForm.variant} onChange={(e) => setReplaceForm({ ...replaceForm, variant: e.target.value })}>
+                      <option value="" disabled>Select which one…</option>
+                      {replaceVariants.map((v) => (
+                        <option key={v.id} value={v.id}>{v.label} ({v.quantity} in stock)</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="field">
                   <label>Item / service name</label>
                   <input required value={replaceForm.item_name} onChange={(e) => setReplaceForm({ ...replaceForm, item_name: e.target.value })} />

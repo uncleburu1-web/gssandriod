@@ -6,13 +6,17 @@ import { money, fmtDate } from '../utils/format';
 import { Icons } from '../components/Icons';
 
 const STATUS_LABEL = {
+  trial: 'Free trial',
   active: 'Active',
   grace: 'Grace period',
   expired: 'Expired',
+  suspended: 'Suspended',
+  cancelled: 'Cancelled',
 };
 
 export default function Billing() {
   const [sub, setSub] = useState(null);
+  const [cycle, setCycle] = useState('yearly');
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState('');
@@ -22,7 +26,11 @@ export default function Billing() {
 
   function load() {
     setLoading(true);
-    subscription.status().then(({ data }) => { setSub(data); setLoading(false); });
+    subscription.status().then(({ data }) => {
+      setSub(data);
+      setCycle(data.billing_cycle || 'yearly'); // default the toggle to whatever they're already on
+      setLoading(false);
+    });
   }
 
   useEffect(load, [versions.subscription]);
@@ -53,7 +61,7 @@ export default function Billing() {
     setRedirecting(true);
     try {
       const callbackUrl = `${window.location.origin}/billing`;
-      const { data } = await subscription.checkout(callbackUrl);
+      const { data } = await subscription.checkout(callbackUrl, cycle);
       window.location.href = data.authorization_url;
     } catch (err) {
       setError(err?.response?.data?.detail || 'Could not start checkout -- try again.');
@@ -66,6 +74,18 @@ export default function Billing() {
   const daysLeft = sub.current_period_end
     ? Math.ceil((new Date(sub.current_period_end) - new Date()) / (1000 * 60 * 60 * 24))
     : null;
+  const isTrial = sub.effective_status === 'trial';
+  const trialEndingSoon = isTrial && daysLeft != null && daysLeft <= 7;
+
+  // pricing comes from the backend (subscriptions/models.py PRICING_NGN) —
+  // never hardcoded here, so a price change on the server is reflected
+  // immediately with no frontend deploy needed.
+  const pricing = sub.pricing || { monthly: { base: 0, additional_branch: 0 }, yearly: { base: 0, additional_branch: 0 } };
+  const addOns = sub.additional_branches || 0;
+  const priceFor = (c) => pricing[c].base + addOns * pricing[c].additional_branch;
+  const savingsPct = pricing.monthly.base > 0
+    ? Math.round((1 - pricing.yearly.base / (pricing.monthly.base * 12)) * 100)
+    : 0;
 
   return (
     <div className="section">
@@ -78,7 +98,7 @@ export default function Billing() {
 
       {verifyResult === 'success' && (
         <div className="banner good" style={{ marginBottom: 16 }}>
-          Payment confirmed -- subscription renewed for another year.
+          Payment confirmed -- subscription updated.
         </div>
       )}
       {verifyResult === 'failed' && (
@@ -88,17 +108,19 @@ export default function Billing() {
       )}
       {error && <div className="form-error">{error}</div>}
 
-      <div className="section-body" style={{ maxWidth: 480 }}>
+      <div className="section-body" style={{ maxWidth: 520 }}>
         <div className="stat-card" style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <div className="stat-label">Status</div>
             <span className={`badge ${sub.effective_status}`}>{STATUS_LABEL[sub.effective_status] || sub.effective_status}</span>
           </div>
           {sub.current_period_end && (
-            <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginTop: 8 }}>
+            <div style={{ fontSize: 12.5, color: trialEndingSoon ? 'var(--warn)' : 'var(--text-dim)', marginTop: 8, fontWeight: trialEndingSoon ? 600 : 400 }}>
               {sub.effective_status === 'expired'
                 ? `Expired ${fmtDate(sub.current_period_end)}`
-                : `Renews ${fmtDate(sub.current_period_end)}${daysLeft != null && daysLeft >= 0 ? ` (${daysLeft} day${daysLeft === 1 ? '' : 's'})` : ''}`}
+                : isTrial
+                  ? `Your free trial ends ${fmtDate(sub.current_period_end)}${daysLeft != null && daysLeft >= 0 ? ` — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left` : ''}`
+                  : `Renews ${fmtDate(sub.current_period_end)}${daysLeft != null && daysLeft >= 0 ? ` (${daysLeft} day${daysLeft === 1 ? '' : 's'})` : ''}`}
             </div>
           )}
           {!sub.cloud_services_enabled && (
@@ -109,8 +131,26 @@ export default function Billing() {
         </div>
 
         <div className="stat-card">
-          <div className="stat-label">Annual plan</div>
-          <div style={{ fontSize: 26, fontWeight: 700, margin: '6px 0' }}>{money(sub.annual_price_ngn)}<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-dim)' }}> / year</span></div>
+          <div className="stat-label" style={{ marginBottom: 10 }}>Choose a plan</div>
+
+          <div className="tabs" style={{ marginBottom: 14 }}>
+            <button type="button" className={`tab ${cycle === 'monthly' ? 'active' : ''}`} onClick={() => setCycle('monthly')}>
+              Monthly
+            </button>
+            <button type="button" className={`tab ${cycle === 'yearly' ? 'active' : ''}`} onClick={() => setCycle('yearly')}>
+              Yearly {savingsPct > 0 && <span style={{ color: 'var(--good)', fontWeight: 700 }}>· Save {savingsPct}%</span>}
+            </button>
+          </div>
+
+          <div style={{ fontSize: 30, fontWeight: 700, margin: '6px 0' }}>
+            {money(priceFor(cycle))}
+            <span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-dim)' }}> / {cycle === 'monthly' ? 'month' : 'year'}</span>
+          </div>
+          {addOns > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>
+              {money(pricing[cycle].base)} base + {addOns} extra branch{addOns === 1 ? '' : 'es'} at {money(pricing[cycle].additional_branch)} each
+            </div>
+          )}
           <div style={{ fontSize: 12.5, color: 'var(--text-dim)', marginBottom: 14 }}>
             Covers backend hosting &amp; database -- desktop sales, stock, and cash register never depend on this being paid.
           </div>

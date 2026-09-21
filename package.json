@@ -10,15 +10,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor-mlkit/barcode-scanning": "^8.1.1",
     "@capacitor/android": "^8.5.2",
+    "@capacitor/app": "^8.0.4",
     "@capacitor/core": "^8.5.2",
     "@capacitor/filesystem": "^8.0.1",
     "@capacitor/share": "^8.0.1",
     "axios": "^1.18.1",
     "cordova-plugin-android-permissions": "^1.1.5",
     "cordova-plugin-bluetooth-serial": "^0.4.7",
-    "html2canvas": "^1.4.1",
     "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.8",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.1",

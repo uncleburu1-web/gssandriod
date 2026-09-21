@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
 import { useTheme } from '../context/ThemeContext';
 import { subscription, branches as branchesApi } from '../api/endpoints';
+import { checkForUpdate } from '../utils/appUpdate';
 import { Icons } from './Icons';
 
 const BASE_NAV_ITEMS = [
@@ -11,32 +12,50 @@ const BASE_NAV_ITEMS = [
   { to: '/inventory', label: 'Inventory', mobileLabel: 'Stock', icon: Icons.inventory },
 ];
 
-const REPAIRS_NAV_ITEM = { to: '/repairs', label: 'Service', mobileLabel: 'Service', icon: Icons.repairs };
+const SERVICE_NAV_ITEM = { to: '/service', label: 'Service', mobileLabel: 'Service', icon: Icons.service };
 
 const SALES_NAV_ITEM = { to: '/sales', label: 'Sales', mobileLabel: 'Sales', icon: Icons.sales };
 
 const PRINTER_NAV_ITEM = { to: '/printer-setup', label: 'Printer', mobileLabel: 'Printer', icon: Icons.printer };
+const SETTINGS_NAV_ITEM = { to: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Icons.settings };
 
 const OWNER_NAV_ITEMS = [
   { to: '/reports', label: 'Reports', mobileLabel: 'Reports', icon: Icons.reports },
   { to: '/liabilities', label: 'Liabilities', mobileLabel: 'Owe', icon: Icons.liabilities },
   { to: '/workers', label: 'Workers', mobileLabel: 'Workers', icon: Icons.workers },
   { to: '/billing', label: 'Billing', mobileLabel: 'Billing', icon: Icons.billing },
-  { to: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Icons.settings },
 ];
 
 export default function Layout() {
-  const { user, logout, isOwner, isCeo, shopName, repairsEnabled } = useAuth();
+  const { user, logout, isOwner, isCeo, shopName, serviceEnabled } = useAuth();
   const { status: liveStatus, versions } = useLive();
   const { theme, toggleTheme } = useTheme();
-  // Repairs only makes sense for businesses that actually fix devices —
-  // a clothing or general retail shop never sees the tab at all, rather
-  // than seeing an empty/irrelevant section. Driven entirely by what the
-  // owner picked at signup (Organization.business_type on the backend).
-  const coreItems = repairsEnabled
-    ? [...BASE_NAV_ITEMS, REPAIRS_NAV_ITEM, SALES_NAV_ITEM, PRINTER_NAV_ITEM]
+
+  // Once per app open, not on every screen change — see src/utils/appUpdate.js
+  // for why this compares versionCode integers rather than display strings.
+  // Silently does nothing if offline or already current; never blocks
+  // anything the cashier is doing.
+  useEffect(() => {
+    checkForUpdate().then((result) => {
+      if (!result?.available) return;
+      const wantsUpdate = window.confirm(
+        `A new version of the app is available (${result.version}). Download it now?`
+      );
+      if (wantsUpdate) window.open(result.downloadUrl, '_system');
+    });
+  }, []);
+  // Service (device repair/servicing) only makes sense for businesses that
+  // actually fix devices — a clothing or general retail shop never sees
+  // the tab at all, rather than seeing an empty/irrelevant section. Driven
+  // entirely by what the owner picked at signup (Organization.business_type
+  // on the backend).
+  const coreItems = serviceEnabled
+    ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, PRINTER_NAV_ITEM]
     : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, PRINTER_NAV_ITEM];
-  const items = isOwner ? [...coreItems, ...OWNER_NAV_ITEMS] : coreItems;
+  // Settings is always reachable (every logged-in user has an account and
+  // a log-out button) — what's INSIDE it (password changes, paired
+  // devices) is what's actually restricted to owners, in Settings.jsx.
+  const items = isOwner ? [...coreItems, ...OWNER_NAV_ITEMS, SETTINGS_NAV_ITEM] : [...coreItems, SETTINGS_NAV_ITEM];
 
   const [sub, setSub] = useState(null);
   useEffect(() => {
@@ -114,6 +133,21 @@ export default function Layout() {
       </div>
 
       <main className="content">
+        {sub && sub.effective_status === 'trial' && sub.current_period_end && (() => {
+          const daysLeft = Math.ceil((new Date(sub.current_period_end) - new Date()) / (1000 * 60 * 60 * 24));
+          // Only nags in the final week of the trial — showing this from
+          // day one would just be noise; a week out is when it's actually
+          // actionable. Every login re-triggers this fetch, so the count
+          // is always current, e.g. "ends in 5 days" the way it was asked
+          // for, not a one-time dismissible toast that could go stale.
+          if (daysLeft > 7) return null;
+          return (
+            <div className="banner warn" style={{ marginBottom: 18 }}>
+              {daysLeft <= 0 ? 'Your free trial ends today.' : `Your free trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`}
+              {isOwner && <Link to="/billing" style={{ marginLeft: 'auto', fontWeight: 700 }}>Choose a plan →</Link>}
+            </div>
+          );
+        })()}
         {sub && !sub.cloud_services_enabled && (
           <div className="banner warn" style={{ marginBottom: 18 }}>
             {sub.effective_status === 'expired'

@@ -1,15 +1,48 @@
 import { useEffect, useState } from 'react';
-import { inventory, batches as batchApi } from '../api/endpoints';
+import { inventory, batches as batchApi, variants as variantApi } from '../api/endpoints';
 import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
 import { money, fmtDate, apiErrorMessage } from '../utils/format';
 import { Icons } from '../components/Icons';
+import { scanBarcode } from '../utils/barcodeScanner';
 
-const emptyItemForm = { name: '', short_code: '', category: 'laptop', brand: '', unit: 'PIECE', spec: '', min_stock: 2 };
-const emptyBatchForm = { batch_number: '', quantity_received: '', cost_price: '', selling_price: '', expiry_date: '', supplier_name: '' };
+// Full label map for every category code that has ever existed (matches
+// inventory/models.py CATEGORY_CHOICES) — used only as a display fallback
+// for items whose stored category isn't in this org's current picker (a
+// mixed catalog, or an item saved before the shop switched business type).
+// The picker itself never uses this list directly — see availableCategories
+// below, which the backend already scopes to this org's business_type.
+const FALLBACK_LABEL = {
+  laptop: 'Laptop', part: 'Part', accessory: 'Accessory', consumable: 'Consumable',
+  medicine: 'Medicine / Drug', tablet_capsule: 'Tablet / Capsule', syrup_liquid: 'Syrup / Liquid',
+  injection: 'Injection', medical_supply: 'Medical supply', equipment: 'Equipment',
+  apparel_top: 'Top / Shirt', apparel_bottom: 'Trousers / Skirt', footwear: 'Footwear',
+  outerwear: 'Outerwear', clothing_accessory: 'Bag / Fashion accessory',
+  grocery: 'Grocery', household: 'Household item', stationery: 'Stationery', beverage: 'Beverage',
+  other: 'Other',
+};
+
+// Just a hint text in an empty input — shown before the org's actual
+// business_type-scoped categories (above) even load, so it's a plain
+// lookup rather than derived from availableCategories.
+const NAME_PLACEHOLDER = {
+  gadgets: 'e.g. HP EliteBook 840 G5',
+  pharmacy: 'e.g. Paracetamol 500',
+  clothing: "e.g. Men's Polo Shirt, size M",
+  general: 'e.g. Indomie Noodles (carton)',
+};
+
+const emptyItemForm = { name: '', short_code: '', barcode: '', category: 'other', brand: '', unit: 'PIECE', spec: '', min_stock: 2, prescription_required: false };
+const emptyBatchForm = { batch_number: '', quantity_received: '', cost_price: '', selling_price: '', expiry_date: '', supplier_name: '', variant: '' };
+const emptyVariantForm = { size: '', color: '', sku: '' };
 
 export default function Inventory() {
-  const { isOwner } = useAuth();
+  const { isOwner, pharmacyEnabled, businessType, availableCategories } = useAuth();
+  // Backend already scopes this to the org's business_type — e.g. a
+  // clothing shop only gets Top/Bottom/Footwear/... + Other, a gadgets
+  // shop only gets Laptop/Part/Accessory/Consumable + Other. Falls back
+  // to just "Other" if the field is ever missing (older cached session).
+  const categoryOptions = availableCategories.length ? availableCategories : [{ value: 'other', label: 'Other' }];
   const { versions } = useLive();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,6 +56,10 @@ export default function Inventory() {
   const [editingBatch, setEditingBatch] = useState(null);
   const [batchForm, setBatchForm] = useState(emptyBatchForm);
   const [noExpiry, setNoExpiry] = useState(false);
+
+  const [variantModalItem, setVariantModalItem] = useState(null);
+  const [editingVariant, setEditingVariant] = useState(null);
+  const [variantForm, setVariantForm] = useState(emptyVariantForm);
 
   const [expandedId, setExpandedId] = useState(null);
   const [expandedDetail, setExpandedDetail] = useState(null);
@@ -49,7 +86,7 @@ export default function Inventory() {
 
   function openAddItem() {
     setEditingItem(null);
-    setItemForm(emptyItemForm);
+    setItemForm({ ...emptyItemForm, category: categoryOptions[0]?.value || 'other' });
     setError('');
     setItemModalOpen(true);
   }
@@ -59,6 +96,16 @@ export default function Inventory() {
     setItemForm({ ...item });
     setError('');
     setItemModalOpen(true);
+  }
+
+  async function handleScanBarcode() {
+    setError('');
+    try {
+      const code = await scanBarcode();
+      if (code) setItemForm((f) => ({ ...f, barcode: code }));
+    } catch (err) {
+      setError(err.message || 'Could not open the camera scanner.');
+    }
   }
 
   async function handleItemSubmit(e) {
@@ -104,7 +151,12 @@ export default function Inventory() {
   function openAddBatch(item) {
     setBatchModalItem(item);
     setEditingBatch(null);
-    setBatchForm(emptyBatchForm);
+    // Default to the item's first variant when it has any — a variant
+    // item's batches are expected to name one (see StockBatchSerializer
+    // .validate on the backend), so this is the field that actually
+    // needs a sensible default, not just a convenience.
+    const firstVariant = expandedDetail?.variants?.[0];
+    setBatchForm({ ...emptyBatchForm, variant: firstVariant ? firstVariant.id : '' });
     setNoExpiry(false);
     setError('');
   }
@@ -119,6 +171,7 @@ export default function Inventory() {
       selling_price: batch.selling_price,
       expiry_date: batch.expiry_date || '',
       supplier_name: batch.supplier_name || '',
+      variant: batch.variant || '',
     });
     setNoExpiry(!batch.expiry_date);
     setError('');
@@ -150,6 +203,44 @@ export default function Inventory() {
     refreshExpanded(itemId);
   }
 
+  function openAddVariant(item) {
+    setVariantModalItem(item);
+    setEditingVariant(null);
+    setVariantForm(emptyVariantForm);
+    setError('');
+  }
+
+  function openEditVariant(item, variant) {
+    setVariantModalItem(item);
+    setEditingVariant(variant);
+    setVariantForm({ size: variant.size, color: variant.color, sku: variant.sku });
+    setError('');
+  }
+
+  async function handleVariantSubmit(e) {
+    e.preventDefault();
+    setError('');
+    try {
+      if (editingVariant) {
+        await variantApi.update(editingVariant.id, variantForm);
+      } else {
+        await inventory.addVariant(variantModalItem.id, variantForm);
+      }
+      const itemId = variantModalItem.id;
+      setVariantModalItem(null);
+      setEditingVariant(null);
+      refreshExpanded(itemId);
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Could not save this variant — check the fields and try again.'));
+    }
+  }
+
+  async function handleDeleteVariant(variantId, itemId) {
+    if (!confirm('Remove this variant? Its stock batches stop being tracked separately.')) return;
+    await variantApi.remove(variantId);
+    refreshExpanded(itemId);
+  }
+
   return (
     <>
       <div className="topbar">
@@ -172,7 +263,7 @@ export default function Inventory() {
           {loading ? (
             <div className="empty">Loading…</div>
           ) : items.length === 0 ? (
-            <div className="empty">No stock items yet.{isOwner && ' Click "Add item" to log your first laptop, part, or accessory.'}</div>
+            <div className="empty">No stock items yet.{isOwner && ' Click "Add item" to log your first one.'}</div>
           ) : (
             <div className="stock-list">
               {items.map((i) => (
@@ -184,7 +275,8 @@ export default function Inventory() {
                         {i.is_low_stock && <span className="badge diagnosing" style={{ marginLeft: 8 }}><span className="ledot" />Low stock</span>}
                       </div>
                       <div className="stock-card-sub mono">
-                        {i.name}{i.spec ? ` · ${i.spec}` : ''} · {i.category}
+                        {i.name}{i.spec ? ` · ${i.spec}` : ''} · {FALLBACK_LABEL[i.category] || i.category}
+                        {i.prescription_required && <span style={{ marginLeft: 6 }}>℞</span>}
                       </div>
                     </div>
                     <div className="stock-card-figures">
@@ -205,6 +297,30 @@ export default function Inventory() {
                   {expandedId === i.id && expandedDetail && (
                     <div className="stock-card-detail">
                       <div className="stock-card-detail-head">
+                        <span>Variants (sizes/colors)</span>
+                        {isOwner && (
+                          <button className="btn small ghost" onClick={() => openAddVariant(i)}>{Icons.plus} Add variant</button>
+                        )}
+                      </div>
+                      {expandedDetail.variants.length === 0 ? (
+                        <div className="empty" style={{ marginBottom: 16 }}>No variants — stock for this item is tracked as one whole.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                          {expandedDetail.variants.map((v) => (
+                            <span key={v.id} className={`badge ${v.is_low_stock ? 'warn' : 'good'}`}>
+                              {v.label} · {v.quantity} left
+                              {isOwner && (
+                                <>
+                                  <button className="btn small ghost" style={{ padding: '0 4px' }} onClick={() => openEditVariant(i, v)}>{Icons.edit}</button>
+                                  <button className="btn small ghost" style={{ padding: '0 4px' }} onClick={() => handleDeleteVariant(v.id, i.id)}>{Icons.trash}</button>
+                                </>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="stock-card-detail-head">
                         <span>Batch history</span>
                         {isOwner && (
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -220,12 +336,17 @@ export default function Inventory() {
                         <div style={{ overflowX: 'auto' }}>
                           <table>
                             <thead>
-                              <tr><th>Batch #</th><th>Received</th><th>Left</th><th>Cost</th><th>Sell</th><th>Expiry</th><th>Supplier</th>{isOwner && <th></th>}</tr>
+                              <tr>
+                                <th>Batch #</th>
+                                {expandedDetail.variants.length > 0 && <th>Variant</th>}
+                                <th>Received</th><th>Left</th><th>Cost</th><th>Sell</th><th>Expiry</th><th>Supplier</th>{isOwner && <th></th>}
+                              </tr>
                             </thead>
                             <tbody>
                               {expandedDetail.batches.map((b) => (
                                 <tr key={b.id}>
                                   <td className="mono">{b.batch_number}</td>
+                                  {expandedDetail.variants.length > 0 && <td>{b.variant_label || '—'}</td>}
                                   <td className="num">{b.quantity_received}</td>
                                   <td className="num">{b.quantity_remaining}</td>
                                   <td className="num">{money(b.cost_price)}</td>
@@ -265,7 +386,7 @@ export default function Inventory() {
             <form onSubmit={handleItemSubmit}>
               <div className="field">
                 <label>Item name</label>
-                <input required value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="e.g. Paracetamol 500 / HP EliteBook 840 G5" />
+                <input required value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder={NAME_PLACEHOLDER[businessType] || NAME_PLACEHOLDER.general} />
               </div>
               <div className="field-row">
                 <div className="field">
@@ -273,36 +394,55 @@ export default function Inventory() {
                   <input value={itemForm.short_code} onChange={(e) => setItemForm({ ...itemForm, short_code: e.target.value })} placeholder="e.g. Para500" />
                 </div>
                 <div className="field">
-                  <label>Spec</label>
-                  <input value={itemForm.spec} onChange={(e) => setItemForm({ ...itemForm, spec: e.target.value })} placeholder="e.g. 200mg, 15.6-inch" />
+                  <label>Barcode</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input style={{ flex: 1 }} value={itemForm.barcode || ''} onChange={(e) => setItemForm({ ...itemForm, barcode: e.target.value })} placeholder="Scan or type — leave blank if it has none" />
+                    <button type="button" className="btn ghost small" onClick={handleScanBarcode} title="Scan with camera">{Icons.scan}</button>
+                  </div>
                 </div>
               </div>
               <div className="field-row">
                 <div className="field">
+                  <label>Spec</label>
+                  <input value={itemForm.spec} onChange={(e) => setItemForm({ ...itemForm, spec: e.target.value })} placeholder="e.g. 200mg, 15.6-inch" />
+                </div>
+                <div className="field">
                   <label>Category</label>
                   <select value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}>
-                    <option value="laptop">Laptop</option>
-                    <option value="part">Part</option>
-                    <option value="accessory">Accessory</option>
-                    <option value="consumable">Consumable</option>
-                    <option value="other">Other</option>
+                    {categoryOptions.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
                   </select>
                 </div>
+              </div>
+              <div className="field-row">
                 <div className="field">
                   <label>Unit</label>
                   <input value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })} placeholder="TABLET, PIECE, BOX…" />
                 </div>
-              </div>
-              <div className="field-row">
                 <div className="field">
                   <label>Brand</label>
                   <input value={itemForm.brand} onChange={(e) => setItemForm({ ...itemForm, brand: e.target.value })} />
                 </div>
+              </div>
+              <div className="field-row">
                 <div className="field">
                   <label>Reorder at (units)</label>
                   <input required type="number" min="0" value={itemForm.min_stock} onChange={(e) => setItemForm({ ...itemForm, min_stock: e.target.value })} />
                 </div>
               </div>
+              {pharmacyEnabled && (
+                <div className="field">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!itemForm.prescription_required}
+                      onChange={(e) => setItemForm({ ...itemForm, prescription_required: e.target.checked })}
+                    />
+                    Prescription required (℞) — can't be sold without one
+                  </label>
+                </div>
+              )}
               <div className="modal-actions">
                 <button type="button" className="btn ghost" onClick={() => setItemModalOpen(false)}>Cancel</button>
                 <button type="submit" className="btn">{editingItem ? 'Save changes' : 'Add item'}</button>
@@ -322,6 +462,17 @@ export default function Inventory() {
                 <label>Batch number</label>
                 <input required value={batchForm.batch_number} onChange={(e) => setBatchForm({ ...batchForm, batch_number: e.target.value })} />
               </div>
+              {expandedDetail?.variants?.length > 0 && (
+                <div className="field">
+                  <label>Variant (size/color)</label>
+                  <select required value={batchForm.variant} onChange={(e) => setBatchForm({ ...batchForm, variant: e.target.value })}>
+                    <option value="" disabled>Select which one…</option>
+                    {expandedDetail.variants.map((v) => (
+                      <option key={v.id} value={v.id}>{v.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="field-row">
                 <div className="field">
                   <label>Quantity received</label>
@@ -361,6 +512,35 @@ export default function Inventory() {
               <div className="modal-actions">
                 <button type="button" className="btn ghost" onClick={() => { setBatchModalItem(null); setEditingBatch(null); }}>Cancel</button>
                 <button type="submit" className="btn">{editingBatch ? 'Save changes' : 'Add batch'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {variantModalItem && (
+        <div className="modal-backdrop" onClick={() => { setVariantModalItem(null); setEditingVariant(null); }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{editingVariant ? 'Edit variant' : 'Add variant'} — {variantModalItem.short_code || variantModalItem.name}</h3>
+            {error && <div className="form-error">{error}</div>}
+            <form onSubmit={handleVariantSubmit}>
+              <div className="field-row">
+                <div className="field">
+                  <label>Size</label>
+                  <input value={variantForm.size} onChange={(e) => setVariantForm({ ...variantForm, size: e.target.value })} placeholder="e.g. Medium" />
+                </div>
+                <div className="field">
+                  <label>Color</label>
+                  <input value={variantForm.color} onChange={(e) => setVariantForm({ ...variantForm, color: e.target.value })} placeholder="e.g. Blue" />
+                </div>
+              </div>
+              <div className="field">
+                <label>SKU (optional)</label>
+                <input value={variantForm.sku} onChange={(e) => setVariantForm({ ...variantForm, sku: e.target.value })} placeholder="For its own barcode label, if it has one" />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn ghost" onClick={() => { setVariantModalItem(null); setEditingVariant(null); }}>Cancel</button>
+                <button type="submit" className="btn">{editingVariant ? 'Save changes' : 'Add variant'}</button>
               </div>
             </form>
           </div>

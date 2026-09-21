@@ -12,7 +12,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { versions } = useLive();
-  const { repairsEnabled } = useAuth();
+  const { serviceEnabled, pharmacyEnabled } = useAuth();
 
   useEffect(() => {
     let mounted = true;
@@ -68,10 +68,10 @@ export default function Dashboard() {
 
       <div className="hero-card" style={{ marginBottom: 16 }}>
         <div className="stat-label">
-          {repairsEnabled ? 'Total collected today — product sales + service payments' : "Today's total collected"}
+          {serviceEnabled ? 'Total collected today — product sales + service payments' : "Today's total collected"}
         </div>
         <div className="hero-value mono">{money(stats.total_collected_today)}</div>
-        {repairsEnabled && (
+        {serviceEnabled && (
           <div className="hero-breakdown">
             <span><span className="dot" style={{ background: 'var(--accent)' }} />Product sales {money(stats.today_revenue)}</span>
             <span><span className="dot" style={{ background: 'var(--good)' }} />Service revenue {money(stats.service_revenue_today)}</span>
@@ -84,7 +84,7 @@ export default function Dashboard() {
           <div className="stat-label">Today's product sales</div>
           <Amount className="stat-value mono" value={stats.today_revenue} />
         </div>
-        {repairsEnabled && (
+        {serviceEnabled && (
           <>
             <div className="stat-card">
               <div className="stat-label">Service revenue (today)</div>
@@ -92,7 +92,7 @@ export default function Dashboard() {
             </div>
             <div className="stat-card">
               <div className="stat-label">Active service tickets</div>
-              <div className="stat-value mono">{stats.active_repairs}</div>
+              <div className="stat-value mono">{stats.active_service_tickets}</div>
             </div>
           </>
         )}
@@ -100,6 +100,12 @@ export default function Dashboard() {
           <div className="stat-label">Low stock items</div>
           <div className={`stat-value mono ${stats.low_stock_count ? 'warn' : 'good'}`}>{stats.low_stock_count}</div>
         </div>
+        {pharmacyEnabled && (
+          <div className="stat-card">
+            <div className="stat-label">Expiring within 30 days</div>
+            <div className={`stat-value mono ${stats.expiring_soon_count ? 'warn' : 'good'}`}>{stats.expiring_soon_count}</div>
+          </div>
+        )}
       </div>
 
       <div className="section">

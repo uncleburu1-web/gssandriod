@@ -7,6 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Needed so this workflow's own GITHUB_TOKEN is allowed to create a
+# Release (the default token is read-only on some repos/orgs).
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -41,12 +46,39 @@ jobs:
       - name: Sync into the Android project
         run: npx cap sync android
 
-      - name: Build debug APK
-        working-directory: android
-        run: chmod +x ./gradlew && ./gradlew assembleDebug
+      - name: Decode the release keystore
+        working-directory: android/app
+        run: echo "${{ secrets.GSS_ANDROID_KEYSTORE_BASE64 }}" | base64 -d > gss-release.keystore
 
-      - name: Upload the APK
-        uses: actions/upload-artifact@v4
+      # Every build gets its own always-increasing versionCode from this
+      # workflow's own run number — Android will not install an "update"
+      # whose versionCode isn't strictly greater than what's already on
+      # the device, so this can't be a fixed number if updates are meant
+      # to work. versionName is just the human-readable label the app
+      # reports to the update-checker (see src/utils/appUpdate.js).
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          GSS_KEYSTORE_PATH: gss-release.keystore
+          GSS_KEYSTORE_PASSWORD: ${{ secrets.GSS_ANDROID_KEYSTORE_PASSWORD }}
+          GSS_KEY_ALIAS: gss
+          GSS_VERSION_CODE: ${{ github.run_number }}
+          GSS_VERSION_NAME: "1.${{ github.run_number }}"
+        run: chmod +x ./gradlew && ./gradlew assembleRelease
+
+      - name: Remove the keystore from the runner
+        if: always()
+        working-directory: android/app
+        run: rm -f gss-release.keystore
+
+      - name: Rename the APK to a stable filename
+        # A fixed name means the download link on the website
+        # (…/releases/latest/download/gss-android.apk) never has to change.
+        run: cp android/app/build/outputs/apk/release/app-release.apk gss-android.apk
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
         with:
-          name: benchline-pos-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          tag_name: v${{ github.run_number }}
+          name: "GSS Android v1.${{ github.run_number }}"
+          files: gss-android.apk

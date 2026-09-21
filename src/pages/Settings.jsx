@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+import { App } from '@capacitor/app';
 import { useAuth } from '../context/AuthContext';
-import { auth as authApi, branches as branchesApi, devices as devicesApi } from '../api/endpoints';
+import { auth as authApi, branches as branchesApi, devices as devicesApi, subscription as subscriptionApi } from '../api/endpoints';
+import { checkForUpdate } from '../utils/appUpdate';
 import { Icons } from '../components/Icons';
 
 function extractError(err, fallback) {
@@ -18,25 +20,71 @@ function extractError(err, fallback) {
 const STATUS_LABELS = { active: 'Active', inactive: 'Inactive', suspended: 'Suspended', archived: 'Archived' };
 
 export default function Settings() {
-  const { user, logout, isCeo, shopName } = useAuth();
+  const { user, logout, isOwner, isCeo, shopName } = useAuth();
 
   return (
     <div>
       <div className="topbar">
         <div>
           <div className="page-title">Settings</div>
-          <div className="page-sub">Your account, {isCeo ? 'branches, and paired devices' : 'and paired devices'}.</div>
+          <div className="page-sub">
+            {isCeo ? 'Your account, branches, and paired devices.' : isOwner ? 'Your account and paired devices.' : 'Your account.'}
+          </div>
         </div>
       </div>
 
-      <AccountSection user={user} shopName={shopName} logout={logout} />
+      <AccountSection user={user} shopName={shopName} logout={logout} isOwner={isOwner} />
+      <AppUpdateSection />
       {isCeo && <BranchesSection />}
-      <DevicesSection />
+      {isOwner && <DevicesSection />}
     </div>
   );
 }
 
-function AccountSection({ user, shopName, logout }) {
+function AppUpdateSection() {
+  const [version, setVersion] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    App.getInfo().then((info) => setVersion(info.version)).catch(() => {});
+  }, []);
+
+  async function handleCheck() {
+    setChecking(true);
+    setMessage('');
+    const result = await checkForUpdate();
+    setChecking(false);
+    if (result === null) {
+      setMessage("Couldn't check right now — try again once you're back online.");
+      return;
+    }
+    if (!result.available) {
+      setMessage("You're on the latest version.");
+      return;
+    }
+    if (window.confirm(`A new version is available (${result.version}). Download it now?`)) {
+      window.open(result.downloadUrl, '_system');
+    }
+  }
+
+  return (
+    <div className="section">
+      <div className="section-head"><h3>App version</h3></div>
+      <div className="section-body">
+        <div className="field-hint" style={{ marginBottom: 10 }}>
+          {version ? `You're running version ${version}.` : 'Checking installed version…'}
+        </div>
+        <button className="btn small" onClick={handleCheck} disabled={checking}>
+          {Icons.device} {checking ? 'Checking…' : 'Check for updates'}
+        </button>
+        {message && <div className="field-hint" style={{ marginTop: 10 }}>{message}</div>}
+      </div>
+    </div>
+  );
+}
+
+function AccountSection({ user, shopName, logout, isOwner }) {
   return (
     <div className="section">
       <div className="section-head"><h3>Account</h3></div>
@@ -52,7 +100,11 @@ function AccountSection({ user, shopName, logout }) {
             {Icons.logout} Log out
           </button>
         </div>
-        <ChangePasswordCard />
+        {/* Password changes go through the owner, not self-service by a
+            seller — keeps one person accountable for who can log in as
+            whom, rather than a seller quietly changing their own
+            credentials without the owner knowing. */}
+        {isOwner && <ChangePasswordCard />}
       </div>
     </div>
   );
@@ -122,12 +174,15 @@ function ChangePasswordCard() {
 }
 
 function BranchesSection() {
+  const navigate = useNavigate();
   const [list, setList] = useState(null);
+  const [sub, setSub] = useState(null);
   const [error, setError] = useState('');
-  const [modalBranch, setModalBranch] = useState(null); // null = closed, {...} = editing
+  const [modalBranch, setModalBranch] = useState(null); // null = closed, {} = new, {...} = editing
 
   function load() {
     branchesApi.list().then(({ data }) => setList(data.results || data)).catch((err) => setError(extractError(err, 'Could not load branches.')));
+    subscriptionApi.status().then(({ data }) => setSub(data)).catch(() => {});
   }
 
   useEffect(() => {
@@ -145,11 +200,24 @@ function BranchesSection() {
     }
   }
 
+  function handleCreateClick() {
+    // A trial org already has the one branch signup created for them —
+    // adding another is a paid-plan feature (see Subscription.total_price_ngn:
+    // every branch past the first is a billed add-on). Rather than hide the
+    // button, it's always there and just routes to plan selection first if
+    // they're not actually paying yet.
+    if (sub && sub.effective_status === 'trial') {
+      navigate('/billing');
+      return;
+    }
+    setModalBranch({});
+  }
+
   return (
     <div className="section">
       <div className="section-head">
         <h3>Branches</h3>
-        <Link to="/branches/new" className="btn small">{Icons.plus} Create branch</Link>
+        <button className="btn small" onClick={handleCreateClick}>{Icons.plus} Create branch</button>
       </div>
       <div className="section-body">
         {error && <div className="form-error">{error}</div>}
@@ -216,6 +284,7 @@ function BranchModal({ branch, onClose, onSaved }) {
   function set(field, value) { setForm((f) => ({ ...f, [field]: value })); }
 
   const hasManagerLogin = !!branch.manager_username;
+  const isNew = !branch.id;
 
   async function save() {
     setError('');
@@ -228,7 +297,11 @@ function BranchModal({ branch, onClose, onSaved }) {
     try {
       const payload = { ...form, opening_date: form.opening_date || null };
       delete payload.confirm_password;
-      await branchesApi.update(branch.id, payload);
+      if (isNew) {
+        await branchesApi.create(payload);
+      } else {
+        await branchesApi.update(branch.id, payload);
+      }
       onSaved();
     } catch (err) {
       setError(extractError(err, 'Could not save this branch — check the fields and try again.'));
@@ -240,7 +313,7 @@ function BranchModal({ branch, onClose, onSaved }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Edit {branch.name}</h3>
+        <h3>{isNew ? 'Create branch' : `Edit ${branch.name}`}</h3>
         {error && <div className="form-error">{error}</div>}
 
         <div className="field-row">
@@ -328,7 +401,7 @@ function BranchModal({ branch, onClose, onSaved }) {
 
         <div className="modal-actions">
           <button className="btn ghost" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+          <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : isNew ? 'Create branch' : 'Save changes'}</button>
         </div>
       </div>
     </div>

@@ -54,7 +54,14 @@ export function AuthProvider({ children }) {
       shopId: user?.shop_id || null,
       shopName: user?.shop_name || 'My Shop',
       shopLogoUrl: user?.shop_logo_url || '',
-      repairsEnabled: !!user?.repairs_enabled,
+      serviceEnabled: !!user?.service_enabled,
+      pharmacyEnabled: !!user?.pharmacy_enabled,
+      businessType: user?.business_type || 'general',
+      // [{ value, label }, ...] already scoped to this org's business_type
+      // by the backend (InventoryItem.category_choices_for) — Inventory
+      // reads this instead of hard-coding which categories belong to
+      // which shop type.
+      availableCategories: user?.available_categories || [],
       refreshUser: async () => { const me = await auth.me(); setUser(me.data); },
     }}>
       {children}

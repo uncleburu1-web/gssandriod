@@ -7,8 +7,14 @@ android {
         applicationId "com.gss.benchline"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Overridable via env vars so CI can stamp every build with an
+        // always-increasing versionCode (see .github/workflows/build-android.yml)
+        // — Android refuses to install an "update" whose versionCode isn't
+        // strictly greater than what's already on the device, so this can't
+        // be left at a fixed "1" if in-place updates are ever going to work.
+        // Falls back to the old fixed values for a normal local dev build.
+        versionCode (System.getenv("GSS_VERSION_CODE") ? System.getenv("GSS_VERSION_CODE").toInteger() : 1)
+        versionName (System.getenv("GSS_VERSION_NAME") ?: "1.0")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +22,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing reads from env vars only — never from a committed
+    // file or hardcoded password. CI decodes the keystore from a GitHub
+    // Secret and sets these before running assembleRelease (see the
+    // workflow). A local `assembleRelease` without those env vars set
+    // will fail signing loudly rather than silently producing an
+    // APK that can't be installed as an update over a real release build.
+    signingConfigs {
+        release {
+            storeFile file(System.getenv("GSS_KEYSTORE_PATH") ?: "gss-release.keystore")
+            storePassword System.getenv("GSS_KEYSTORE_PASSWORD") ?: ""
+            keyAlias System.getenv("GSS_KEY_ALIAS") ?: "gss"
+            keyPassword System.getenv("GSS_KEYSTORE_PASSWORD") ?: ""
+        }
+    }
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
