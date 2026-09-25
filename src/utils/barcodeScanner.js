@@ -13,6 +13,15 @@ const RETAIL_FORMATS = [
   BarcodeFormat.Itf,
 ];
 
+// startScan() renders the native camera preview BEHIND the WebView, and
+// the WebView only shows it through where the page has stopped rendering
+// entirely — background:transparent on a single nested div isn't enough,
+// because ancestors (e.g. body's own opaque background) still paint over
+// it. Toggling this class is what actually punches the hole: see
+// `body.scanner-active` / `.scanner-overlay` in theme.css, where the
+// overlay is the one thing explicitly set back to visibility:visible.
+const SCANNER_ACTIVE_CLASS = 'scanner-active';
+
 async function ensureReady() {
   const { supported } = await BarcodeScanner.isSupported();
   if (!supported) {
@@ -70,10 +79,12 @@ let activeListener = null;
  * not scan()'s ready-made dialog.
  *
  * While this runs, the native camera preview renders BEHIND the app's
- * WebView — the caller is responsible for making SOME real, transparent
- * pixels exist on screen (see ScannerOverlay in Sales.jsx) so that live
- * feed is actually visible; this function only starts the camera and
- * the detection stream, it draws no UI of its own.
+ * WebView. This function makes that visible itself, by adding
+ * SCANNER_ACTIVE_CLASS to <body> (see theme.css: body.scanner-active
+ * goes visibility:hidden, and .scanner-overlay is set back to
+ * visibility:visible) — the caller (see ScannerOverlay in Sales.jsx)
+ * just needs to keep rendering under that `.scanner-overlay` class name
+ * for the hole to line up with its UI.
  *
  * Deliberately does no debouncing here — a steady barcode can fire this
  * callback many times a second while it's in frame. The caller decides
@@ -91,11 +102,25 @@ export async function startContinuousScan(onBarcode) {
     const code = (raw && typeof raw === 'object') ? raw.rawValue : raw;
     if (code) onBarcode(code);
   });
-  await BarcodeScanner.startScan({ formats: RETAIL_FORMATS });
+  document.body.classList.add(SCANNER_ACTIVE_CLASS);
+  try {
+    await BarcodeScanner.startScan({ formats: RETAIL_FORMATS });
+  } catch (err) {
+    // Never leave the page invisible if the camera itself failed to start.
+    document.body.classList.remove(SCANNER_ACTIVE_CLASS);
+    if (activeListener) {
+      await activeListener.remove();
+      activeListener = null;
+    }
+    throw err;
+  }
 }
 
 /** Stops the camera and detection stream started by startContinuousScan(). */
 export async function stopContinuousScan() {
+  // Removed first and unconditionally, so the page is never left
+  // invisible even if the listener/stopScan calls below throw.
+  document.body.classList.remove(SCANNER_ACTIVE_CLASS);
   if (activeListener) {
     await activeListener.remove();
     activeListener = null;

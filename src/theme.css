@@ -412,6 +412,25 @@ tr:last-child td{border-bottom:none;}
    requirement for the native camera preview (which renders behind the
    whole WebView) to actually be visible: the box-shadow trick below dims
    everywhere OUTSIDE the box without touching the box's own background. */
+
+/* FIX: the rules above only make ONE nested div (.scanner-viewfinder)
+   transparent, but ancestors — including body's own opaque `--bg` —
+   were still painting over the whole page, so the WebView surface never
+   actually went transparent and the camera never showed through.
+   barcodeScanner.js now adds `scanner-active` to <body> for exactly as
+   long as the camera is running; visibility:hidden (not just a
+   transparent background) is what reliably stops the page from painting
+   at all, punching the real hole the plugin needs. `.scanner-overlay` is
+   set back to visibility:visible, and everything inside it (scanner-bar,
+   scanner-viewfinder, scanner-hint, scanner-feedback) inherits that
+   automatically since none of them set their own `visibility`. */
+body.scanner-active{
+  visibility:hidden;
+}
+.scanner-overlay{
+  visibility:visible;
+}
+
 .scanner-overlay{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;}
 .scanner-bar{
   background:rgba(10,12,15,.72);backdrop-filter:blur(2px);color:#fff;
