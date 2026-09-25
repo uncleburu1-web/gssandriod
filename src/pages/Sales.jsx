@@ -6,7 +6,7 @@ import { money, fmtDate, apiErrorMessage } from '../utils/format';
 import Amount from '../components/Amount';
 import { printSaleReceipt } from '../utils/receipt';
 import { Icons } from '../components/Icons';
-import { scanBarcode } from '../utils/barcodeScanner';
+import { startContinuousScan, stopContinuousScan } from '../utils/barcodeScanner';
 
 function shopInfoFrom(user) {
   return {
@@ -195,14 +195,54 @@ function PosScreen({ onDone }) {
     }
   }
 
-  async function handleCameraScan() {
+  // Continuous scanning session state — see ScannerOverlay below and
+  // startContinuousScan/stopContinuousScan in utils/barcodeScanner.js.
+  const [scanning, setScanning] = useState(false);
+  const lastCodeRef = useRef(null);
+  const lastAddedAtRef = useRef(0);
+
+  // A steady barcode can fire the underlying 'barcodeScanned' event many
+  // times a second while it's in frame — this is what turns that into
+  // "add once per physical item" without turning into a hard cooldown
+  // that would slow down a cashier scanning several DIFFERENT items in a
+  // row: the lock is keyed to the code itself, not to time alone, so
+  // scanning a different item immediately clears it. Only the exact same
+  // code seen again within DEBOUNCE_MS is treated as "still the same item
+  // sitting in the frame" rather than "a second unit was scanned."
+  const DEBOUNCE_MS = 1200;
+
+  function handleBarcodeDetected(code) {
+    const now = Date.now();
+    if (code === lastCodeRef.current && now - lastAddedAtRef.current < DEBOUNCE_MS) return;
+    lastCodeRef.current = code;
+    lastAddedAtRef.current = now;
+    processScannedCode(code);
+  }
+
+  async function openScanner() {
+    setScanning(true);
     try {
-      const code = await scanBarcode();
-      if (code) processScannedCode(code);
+      await startContinuousScan(handleBarcodeDetected);
     } catch (err) {
+      setScanning(false);
       setScanFeedback({ type: 'error', message: err.message || 'Could not open the camera scanner.' });
     }
   }
+
+  async function closeScanner() {
+    setScanning(false);
+    lastCodeRef.current = null;
+    try {
+      await stopContinuousScan();
+    } catch {
+      // Camera may already be stopped/torn down (e.g. permission was
+      // revoked mid-session) — nothing left to release either way.
+    }
+  }
+
+  // Safety net for navigating away (or a hot reload) mid-scan — never
+  // leave the camera running in the background.
+  useEffect(() => () => { if (scanning) stopContinuousScan().catch(() => {}); }, [scanning]);
 
   function addCustom() {
     if (!customName.trim() || customPrice === '') return;
@@ -279,12 +319,19 @@ function PosScreen({ onDone }) {
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleSearchKeyDown}
           />
-          <button type="button" className="btn ghost" onClick={handleCameraScan} title="Scan with camera">{Icons.scan}</button>
+          <button type="button" className="btn ghost" onClick={openScanner} title="Scan with camera">{Icons.scan}</button>
         </div>
         {scanFeedback && (
           <div className={`banner ${scanFeedback.type === 'ok' ? 'good' : 'danger'}`} style={{ marginBottom: 12 }}>
             {scanFeedback.message}
           </div>
+        )}
+        {scanning && (
+          <ScannerOverlay
+            cartCount={cartCount}
+            feedback={scanFeedback}
+            onClose={closeScanner}
+          />
         )}
         <div className="pos-chips">
           <button className={`pos-chip ${category === 'all' ? 'active' : ''}`} onClick={() => setCategory('all')}>All</button>
@@ -447,6 +494,37 @@ function PosScreen({ onDone }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Full-screen continuous-scan UI. The native camera preview renders
+ * BEHIND the whole app WebView, so the one thing this component has to
+ * get right is leaving some real, transparent pixels on screen — that's
+ * the .scanner-viewfinder box (background: transparent in theme.css);
+ * everywhere else here is drawn as normal opaque UI on top, same as any
+ * other screen. No barcode handling lives here — detected codes already
+ * reach the cart via handleBarcodeDetected -> processScannedCode before
+ * this ever re-renders; this component only shows where to point the
+ * camera and how many items are in the cart so far.
+ */
+function ScannerOverlay({ cartCount, feedback, onClose }) {
+  return (
+    <div className="scanner-overlay">
+      <div className="scanner-bar">
+        <span className="cart-count">{cartCount} item{cartCount === 1 ? '' : 's'} in cart</span>
+        <button type="button" className="btn ghost small" onClick={onClose}>{Icons.x} Done scanning</button>
+      </div>
+      <div className="scanner-middle">
+        <div className="scanner-viewfinder" />
+        {feedback && (
+          <div className="scanner-feedback">
+            <div className={`banner ${feedback.type === 'ok' ? 'good' : 'danger'}`}>{feedback.message}</div>
+          </div>
+        )}
+        <p className="scanner-hint">Point the camera at a barcode — it'll keep adding items until you tap "Done scanning."</p>
+      </div>
     </div>
   );
 }
