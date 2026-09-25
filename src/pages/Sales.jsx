@@ -308,6 +308,22 @@ function PosScreen({ onDone }) {
     }
   }
 
+  // While scanning, render ONLY the overlay — nothing else. A transparent
+  // "hole" in the overlay only reveals the native camera preview if
+  // NOTHING opaque is painted behind it anywhere in the DOM; the normal
+  // page (product grid, cart panel) staying mounted underneath was
+  // exactly that "something opaque," which is why the camera never
+  // showed through no matter how the overlay's own CSS was written.
+  if (scanning) {
+    return (
+      <ScannerOverlay
+        cartCount={cartCount}
+        feedback={scanFeedback}
+        onClose={closeScanner}
+      />
+    );
+  }
+
   return (
     <div className="pos-layout">
       <div className="pos-catalog">
@@ -325,13 +341,6 @@ function PosScreen({ onDone }) {
           <div className={`banner ${scanFeedback.type === 'ok' ? 'good' : 'danger'}`} style={{ marginBottom: 12 }}>
             {scanFeedback.message}
           </div>
-        )}
-        {scanning && (
-          <ScannerOverlay
-            cartCount={cartCount}
-            feedback={scanFeedback}
-            onClose={closeScanner}
-          />
         )}
         <div className="pos-chips">
           <button className={`pos-chip ${category === 'all' ? 'active' : ''}`} onClick={() => setCategory('all')}>All</button>
