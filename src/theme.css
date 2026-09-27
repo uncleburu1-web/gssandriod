@@ -405,3 +405,48 @@ tr:last-child td{border-bottom:none;}
   .pos-grid{max-height:none;}
 }
 
+/* Continuous barcode scanner overlay (Sales.jsx) — sits above everything
+   at full viewport size. Its own background stays opaque (the dark bars
+   + the dimmed area around the viewfinder) EXCEPT the viewfinder box
+   itself, which is genuinely transparent — that's the one real
+   requirement for the native camera preview (which renders behind the
+   whole WebView) to actually be visible: the box-shadow trick below dims
+   everywhere OUTSIDE the box without touching the box's own background. */
+
+/* FIX: the rules above only make ONE nested div (.scanner-viewfinder)
+   transparent, but ancestors — including body's own opaque `--bg` —
+   were still painting over the whole page, so the WebView surface never
+   actually went transparent and the camera never showed through.
+   barcodeScanner.js now adds `scanner-active` to <body> for exactly as
+   long as the camera is running; visibility:hidden (not just a
+   transparent background) is what reliably stops the page from painting
+   at all, punching the real hole the plugin needs. `.scanner-overlay` is
+   set back to visibility:visible, and everything inside it (scanner-bar,
+   scanner-viewfinder, scanner-hint, scanner-feedback) inherits that
+   automatically since none of them set their own `visibility`. */
+body.scanner-active{
+  visibility:hidden;
+}
+.scanner-overlay{
+  visibility:visible;
+}
+
+.scanner-overlay{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;}
+.scanner-bar{
+  background:rgba(10,12,15,.72);backdrop-filter:blur(2px);color:#fff;
+  padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.scanner-bar .btn.ghost{border-color:rgba(255,255,255,.45);color:#fff;}
+.scanner-bar .cart-count{font-size:13px;font-weight:600;}
+.scanner-middle{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.scanner-viewfinder{
+  width:82%;max-width:380px;aspect-ratio:16/10;background:transparent;
+  border:2px solid var(--accent);border-radius:14px;
+  box-shadow:0 0 0 9999px rgba(10,12,15,.55);
+}
+.scanner-hint{
+  position:absolute;bottom:10%;left:16px;right:16px;text-align:center;
+  color:#fff;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,.7);
+}
+.scanner-feedback{position:absolute;top:12%;left:16px;right:16px;text-align:center;z-index:1;}
+.scanner-feedback .banner{display:inline-flex;}

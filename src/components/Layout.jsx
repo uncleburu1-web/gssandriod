@@ -14,6 +14,22 @@ const BASE_NAV_ITEMS = [
 
 const SERVICE_NAV_ITEM = { to: '/service', label: 'Service', mobileLabel: 'Service', icon: Icons.service };
 
+const LIVE_STATUS_LABEL = {
+  open: 'Live',
+  connecting: 'Connecting…',
+  reconnecting: 'Reconnecting…',
+  offline: 'Offline',
+  closed: 'Reconnecting…',
+};
+
+const LIVE_STATUS_TITLE = {
+  open: 'Live — sales and stock changes appear instantly',
+  connecting: 'Connecting to live updates…',
+  reconnecting: 'Connection dropped — retrying now',
+  offline: "Been offline a little while — you can keep selling, we'll catch up once it's back",
+  closed: 'Reconnecting…',
+};
+
 const SALES_NAV_ITEM = { to: '/sales', label: 'Sales', mobileLabel: 'Sales', icon: Icons.sales };
 
 const PRINTER_NAV_ITEM = { to: '/printer-setup', label: 'Printer', mobileLabel: 'Printer', icon: Icons.printer };
@@ -112,11 +128,9 @@ export default function Layout() {
           <div style={{ opacity: 0.6, fontSize: 10.5, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.5px' }}>
             {isOwner ? 'Owner' : 'Seller'}
           </div>
-          <div className={`live-indicator ${liveStatus === 'open' ? 'live' : ''}`} title={
-            liveStatus === 'open' ? 'Live — sales and stock changes appear instantly' : 'Reconnecting…'
-          }>
+          <div className={`live-indicator ${liveStatus === 'open' ? 'live' : ''}`} title={LIVE_STATUS_TITLE[liveStatus] || LIVE_STATUS_TITLE.closed}>
             <span className="dot" />
-            {liveStatus === 'open' ? 'Live' : 'Reconnecting…'}
+            {LIVE_STATUS_LABEL[liveStatus] || LIVE_STATUS_LABEL.closed}
           </div>
           <button
             className="btn ghost small"
