@@ -34,6 +34,12 @@ export const inventory = {
   remove: (id) => client.delete(`/inventory/items/${id}/`),
   addBatch: (id, data) => client.post(`/inventory/items/${id}/batches/`, data),
   addVariant: (id, data) => client.post(`/inventory/items/${id}/variants/`, data),
+  uploadImage: (id, file) => {
+    const formData = new FormData();
+    formData.append('image', file);
+    return client.post(`/inventory/items/${id}/image/`, formData);
+  },
+  removeImage: (id) => client.delete(`/inventory/items/${id}/image/`),
 };
 
 export const batches = {
@@ -76,6 +82,17 @@ export const workers = {
   create: (data) => client.post('/workers/', data),
   update: (id, data) => client.patch(`/workers/${id}/`, data),
   remove: (id) => client.delete(`/workers/${id}/`),
+};
+
+export const attendance = {
+  list: (params) => client.get('/attendance/', { params }),
+  today: (date) => client.get('/attendance/today/', { params: date ? { date } : undefined }),
+  mark: (data) => client.post('/attendance/mark/', data),
+};
+
+export const controlCenter = {
+  get: () => client.get('/control-center/'),
+  update: (changes) => client.put('/control-center/', { changes }),
 };
 
 export const liabilities = {
