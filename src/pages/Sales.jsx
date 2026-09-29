@@ -374,6 +374,9 @@ function PosScreen({ onDone }) {
                 disabled={outOfStock || atLimit}
                 onClick={() => handleProductTap(item)}
               >
+                {item.image_url && (
+                  <img className="pos-tile-img" src={item.image_url} alt="" onError={(e) => { e.target.style.display = 'none'; }} />
+                )}
                 <div className="pos-tile-name">{item.short_code || item.name}</div>
                 <div className="pos-tile-stock">
                   {item.has_variants ? `${item.quantity} in stock (sizes/colors)` : outOfStock ? 'Out of stock' : `${item.quantity} in stock`}
@@ -546,7 +549,7 @@ function ItemsSummary({ items }) {
 }
 
 function SalesHistory({ tab }) {
-  const { user } = useAuth();
+  const { user, capabilities } = useAuth();
   const shopInfo = shopInfoFrom(user);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -694,11 +697,15 @@ function SalesHistory({ tab }) {
                     <td>{s.staff_name || s.worker_name || '—'}</td>
                     <td className="row-actions">
                       <button className="btn ghost small" onClick={() => printSaleReceipt(s, shopInfo)} title="Print receipt">{Icons.print}</button>
-                      <button className="btn ghost small" onClick={() => openReplace(s)} title="Replace an item">{Icons.edit}</button>
+                      {capabilities.edit_sale && (
+                        <button className="btn ghost small" onClick={() => openReplace(s)} title="Replace an item">{Icons.edit}</button>
+                      )}
                       {tab === 'outstanding' && (
                         <button className="btn small" onClick={() => openPay(s)}>Pay</button>
                       )}
-                      <button className="btn ghost small" onClick={() => handleDelete(s.id)} title="Delete">{Icons.trash}</button>
+                      {capabilities.delete_sale && (
+                        <button className="btn ghost small" onClick={() => handleDelete(s.id)} title="Delete">{Icons.trash}</button>
+                      )}
                     </td>
                   </tr>
                 ))}
