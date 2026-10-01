@@ -62,6 +62,7 @@ export function AuthProvider({ children }) {
       // reads this instead of hard-coding which categories belong to
       // which shop type.
       availableCategories: user?.available_categories || [],
+      capabilities: { edit_sale: true, delete_sale: true, ...(user?.capabilities || {}) },
       refreshUser: async () => { const me = await auth.me(); setUser(me.data); },
     }}>
       {children}
