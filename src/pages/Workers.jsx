@@ -4,9 +4,16 @@ import { money, fmtDate } from '../utils/format';
 import { Icons } from '../components/Icons';
 
 const ROLE_LABEL = {
-  owner: 'Owner / Admin', seller: 'Seller', technician: 'Service technician',
+  owner: 'Owner / Admin', branch_manager: 'Branch manager', seller: 'Seller',
+  reception: 'Receptionist', technician: 'Service technician',
   attendant: 'Shop attendant', other: 'Other',
 };
+
+// A branch manager is assigned from Settings → Branches, not here (see
+// BranchesSection); 'owner' only exists from signup. Neither belongs in
+// this create/edit dropdown, even though both need a label above for
+// whoever the Workers list is showing.
+const ASSIGNABLE_ROLES = Object.entries(ROLE_LABEL).filter(([v]) => v !== 'owner' && v !== 'branch_manager');
 
 const emptyForm = {
   full_name: '', role: 'seller', phone: '', salary: '', hire_date: '',
@@ -155,7 +162,7 @@ export default function Workers() {
                 <div className="field">
                   <label>Role</label>
                   <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                    {Object.entries(ROLE_LABEL).filter(([v]) => v !== 'owner').map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    {ASSIGNABLE_ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                 </div>
                 <div className="field">

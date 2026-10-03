@@ -51,6 +51,18 @@ export function AuthProvider({ children }) {
       user, loading, login, register, logout,
       isOwner: !!user?.is_owner,
       isCeo: !!user?.is_ceo,
+      // The worker's actual role string — 'owner' | 'branch_manager' |
+      // 'seller' | 'reception' | 'technician' | 'attendant' | 'other'.
+      // Prefer a `capabilities.xyz` check over comparing this directly
+      // where one exists (see below).
+      role: user?.role || null,
+      // { delete_sale, edit_sale, mark_attendance, view_attendance, ... }
+      // — always all-true for an owner/branch manager/CEO. See backend
+      // core.capabilities for the full registry; this is what every
+      // capability-gated button/nav item checks instead of re-deriving
+      // role logic client-side. Never the actual security boundary (the
+      // backend enforces that regardless of what this app shows).
+      capabilities: user?.capabilities || {},
       shopId: user?.shop_id || null,
       shopName: user?.shop_name || 'My Shop',
       shopLogoUrl: user?.shop_logo_url || '',

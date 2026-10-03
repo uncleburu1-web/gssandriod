@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { App } from '@capacitor/app';
 import { useAuth } from '../context/AuthContext';
-import { auth as authApi, branches as branchesApi, devices as devicesApi, subscription as subscriptionApi } from '../api/endpoints';
+import { auth as authApi, branches as branchesApi, devices as devicesApi, subscription as subscriptionApi, controlCenter as controlCenterApi } from '../api/endpoints';
 import { checkForUpdate } from '../utils/appUpdate';
 import { Icons } from '../components/Icons';
 
@@ -18,6 +18,18 @@ function extractError(err, fallback) {
 }
 
 const STATUS_LABELS = { active: 'Active', inactive: 'Inactive', suspended: 'Suspended', archived: 'Archived' };
+
+// Every Worker.ROLE_CHOICES label this app needs — the Account card's own
+// role line, and the Control Center's column headers below. Includes
+// 'owner'/'branch_manager' too (for AccountSection) even though neither
+// is configurable in the Control Center — see backend
+// core.capabilities.CONFIGURABLE_ROLES, the actual list ControlCenterSection
+// renders columns for.
+const STAFF_ROLE_LABEL = {
+  owner: 'Owner', branch_manager: 'Branch manager', seller: 'Seller',
+  reception: 'Receptionist', technician: 'Service technician',
+  attendant: 'Shop attendant', other: 'Other',
+};
 
 export default function Settings() {
   const { user, logout, isOwner, isCeo, shopName } = useAuth();
@@ -36,6 +48,7 @@ export default function Settings() {
       <AccountSection user={user} shopName={shopName} logout={logout} isOwner={isOwner} />
       <AppUpdateSection />
       {isCeo && <BranchesSection />}
+      {isCeo && <ControlCenterSection />}
       {isOwner && <DevicesSection />}
     </div>
   );
@@ -92,7 +105,7 @@ function AccountSection({ user, shopName, logout, isOwner }) {
         <div className="field-row">
           <div className="field"><label>Name</label><div className="static-value">{user?.full_name || user?.username}</div></div>
           <div className="field"><label>Username</label><div className="static-value">{user?.username}</div></div>
-          <div className="field"><label>Role</label><div className="static-value">{user?.is_owner ? 'Owner' : 'Seller'}</div></div>
+          <div className="field"><label>Role</label><div className="static-value">{STAFF_ROLE_LABEL[user?.role] || (user?.is_owner ? 'Owner' : 'Seller')}</div></div>
           <div className="field"><label>Shop</label><div className="static-value">{shopName}</div></div>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
@@ -403,6 +416,93 @@ function BranchModal({ branch, onClose, onSaved }) {
           <button className="btn ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : isNew ? 'Create branch' : 'Save changes'}</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ControlCenterSection() {
+  const [data, setData] = useState(null); // { roles, capabilities }
+  const [error, setError] = useState('');
+  const [savingKey, setSavingKey] = useState(''); // `${role}:${capability}` currently in flight
+
+  function load() {
+    controlCenterApi.get()
+      .then(({ data }) => setData(data))
+      .catch((err) => setError(extractError(err, 'Could not load the Control Center.')));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function toggle(capabilityId, role, nextAllowed) {
+    const key = `${role}:${capabilityId}`;
+    setSavingKey(key);
+    setError('');
+    setData((d) => ({
+      ...d,
+      capabilities: d.capabilities.map((c) => (
+        c.id === capabilityId ? { ...c, roles: { ...c.roles, [role]: nextAllowed } } : c
+      )),
+    }));
+    try {
+      await controlCenterApi.update([{ role, capability: capabilityId, allowed: nextAllowed }]);
+    } catch (err) {
+      setError(extractError(err, 'Could not save that change — try again.'));
+      load(); // roll back to whatever the server actually has
+    } finally {
+      setSavingKey('');
+    }
+  }
+
+  return (
+    <div className="section">
+      <div className="section-head"><h3>Control Center</h3></div>
+      <div className="section-body">
+        <div className="field-hint" style={{ marginBottom: 12 }}>
+          Decide what each role can do, across every branch. An owner or branch manager can always do
+          everything within their own branch no matter what's set here — this only ever affects seller,
+          reception, technician, attendant, and other logins.
+        </div>
+        {error && <div className="form-error">{error}</div>}
+        {!data ? (
+          <div className="empty">Loading…</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Capability</th>
+                  {data.roles.map((role) => (
+                    <th key={role} style={{ textAlign: 'center' }}>{STAFF_ROLE_LABEL[role] || role}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.capabilities.map((cap) => (
+                  <tr key={cap.id}>
+                    <td>
+                      <div style={{ fontWeight: 600 }}>{cap.label}</div>
+                      <div className="field-hint">{cap.description}</div>
+                    </td>
+                    {data.roles.map((role) => {
+                      const key = `${role}:${cap.id}`;
+                      return (
+                        <td key={role} style={{ textAlign: 'center' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!cap.roles[role]}
+                            disabled={savingKey === key}
+                            onChange={(e) => toggle(cap.id, role, e.target.checked)}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

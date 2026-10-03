@@ -31,16 +31,32 @@ const LIVE_STATUS_TITLE = {
 };
 
 const SALES_NAV_ITEM = { to: '/sales', label: 'Sales', mobileLabel: 'Sales', icon: Icons.sales };
+const ATTENDANCE_NAV_ITEM = { to: '/attendance', label: 'Attendance', mobileLabel: 'Attend', icon: Icons.workers };
 
 const PRINTER_NAV_ITEM = { to: '/printer-setup', label: 'Printer', mobileLabel: 'Printer', icon: Icons.printer };
 const SETTINGS_NAV_ITEM = { to: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Icons.settings };
 
+// Reports/Liabilities/Workers: full access within your own branch — an
+// owner OR a branch manager (core.permissions.is_owner on the backend,
+// mirrored by MeView's is_owner_flag).
 const OWNER_NAV_ITEMS = [
   { to: '/reports', label: 'Reports', mobileLabel: 'Reports', icon: Icons.reports },
   { to: '/liabilities', label: 'Liabilities', mobileLabel: 'Owe', icon: Icons.liabilities },
   { to: '/workers', label: 'Workers', mobileLabel: 'Workers', icon: Icons.workers },
+];
+
+// Billing is organization-wide (one subscription per Organization, shared
+// by every branch) — a branch manager's "owner within my branch"
+// authority deliberately doesn't extend to it, so this is CEO-only.
+const CEO_NAV_ITEMS = [
   { to: '/billing', label: 'Billing', mobileLabel: 'Billing', icon: Icons.billing },
 ];
+
+const STAFF_ROLE_LABEL = {
+  owner: 'Owner', branch_manager: 'Branch manager', seller: 'Seller',
+  reception: 'Receptionist', technician: 'Service technician',
+  attendant: 'Shop attendant', other: 'Other',
+};
 
 export default function Layout() {
   const { user, logout, isOwner, isCeo, shopName, serviceEnabled } = useAuth();
@@ -66,12 +82,18 @@ export default function Layout() {
   // entirely by what the owner picked at signup (Organization.business_type
   // on the backend).
   const coreItems = serviceEnabled
-    ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, PRINTER_NAV_ITEM]
-    : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, PRINTER_NAV_ITEM];
+    ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM]
+    : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM];
   // Settings is always reachable (every logged-in user has an account and
   // a log-out button) — what's INSIDE it (password changes, paired
-  // devices) is what's actually restricted to owners, in Settings.jsx.
-  const items = isOwner ? [...coreItems, ...OWNER_NAV_ITEMS, SETTINGS_NAV_ITEM] : [...coreItems, SETTINGS_NAV_ITEM];
+  // devices, the Control Center) is what's actually restricted to
+  // owners/CEO, in Settings.jsx itself.
+  const items = [
+    ...coreItems,
+    ...(isOwner ? OWNER_NAV_ITEMS : []),
+    ...(isCeo ? CEO_NAV_ITEMS : []),
+    SETTINGS_NAV_ITEM,
+  ];
 
   const [sub, setSub] = useState(null);
   useEffect(() => {
@@ -126,7 +148,7 @@ export default function Layout() {
         <div className="nav-footer mono">
           {user?.full_name || user?.username}
           <div style={{ opacity: 0.6, fontSize: 10.5, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-            {isOwner ? 'Owner' : 'Seller'}
+            {STAFF_ROLE_LABEL[user?.role] || (isOwner ? 'Owner' : 'Seller')}
           </div>
           <div className={`live-indicator ${liveStatus === 'open' ? 'live' : ''}`} title={LIVE_STATUS_TITLE[liveStatus] || LIVE_STATUS_TITLE.closed}>
             <span className="dot" />
@@ -158,7 +180,7 @@ export default function Layout() {
           return (
             <div className="banner warn" style={{ marginBottom: 18 }}>
               {daysLeft <= 0 ? 'Your free trial ends today.' : `Your free trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`}
-              {isOwner && <Link to="/billing" style={{ marginLeft: 'auto', fontWeight: 700 }}>Choose a plan →</Link>}
+              {isCeo && <Link to="/billing" style={{ marginLeft: 'auto', fontWeight: 700 }}>Choose a plan →</Link>}
             </div>
           );
         })()}
@@ -167,7 +189,7 @@ export default function Layout() {
             {sub.effective_status === 'expired'
               ? 'Subscription expired — cloud sync and the CEO app are paused. Selling on this desktop still works normally.'
               : "Subscription in its grace period — renew soon to keep cloud sync running."}
-            {isOwner && <Link to="/billing" style={{ marginLeft: 'auto', fontWeight: 700 }}>Subscribe →</Link>}
+            {isCeo && <Link to="/billing" style={{ marginLeft: 'auto', fontWeight: 700 }}>Subscribe →</Link>}
           </div>
         )}
         <Outlet />

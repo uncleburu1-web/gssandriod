@@ -78,7 +78,7 @@ function PosScreen({ onDone }) {
     inventory.list().then(({ data }) => {
       setCatalog(data.results || data);
       setLoadingCatalog(false);
-    });
+    }).catch(() => setLoadingCatalog(false));
   }
 
   const { versions } = useLive();
