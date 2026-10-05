@@ -1,8 +1,5 @@
 import { BarcodeScanner, BarcodeFormat } from '@capacitor-mlkit/barcode-scanning';
-<<<<<<< HEAD
-=======
 import { isAndroid } from './platform';
->>>>>>> 96569eb (Add iOS app and iOS build workflow)
 
 // Every extra format ML Kit has to check a frame against costs scanning
 // speed — these seven cover essentially anything a shop's stock carries,
@@ -28,17 +25,6 @@ async function ensureReady() {
     throw new Error('Camera permission is needed to scan a barcode.');
   }
 
-<<<<<<< HEAD
-  // Needs the Google Barcode Scanner module from Play Services. Nearly
-  // every real device already has it bundled; this only kicks in
-  // installation for the rare one that doesn't, rather than just
-  // failing. iOS has no equivalent step — ML Kit ships the model
-  // in-app there, so this is a no-op on iOS (isGoogleBarcodeScannerModuleAvailable
-  // resolves `available: true` on iOS per the plugin's own docs).
-  const { available } = await BarcodeScanner.isGoogleBarcodeScannerModuleAvailable();
-  if (!available) {
-    await BarcodeScanner.installGoogleBarcodeScannerModule();
-=======
   // Android only: needs the Google Barcode Scanner module from Play
   // Services. Nearly every real device already has it bundled; this only
   // kicks in installation for the rare one that doesn't, rather than just
@@ -52,7 +38,6 @@ async function ensureReady() {
     if (!available) {
       await BarcodeScanner.installGoogleBarcodeScannerModule();
     }
->>>>>>> 96569eb (Add iOS app and iOS build workflow)
   }
 }
 

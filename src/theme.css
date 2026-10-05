@@ -460,8 +460,6 @@ body.scanner-active{
 }
 .scanner-feedback{position:absolute;top:12%;left:16px;right:16px;text-align:center;z-index:1;}
 .scanner-feedback .banner{display:inline-flex;}
-<<<<<<< HEAD
-=======
 
 /* ---------- iPhone / iPad (Capacitor iOS) ----------
    The page runs edge-to-edge (viewport-fit=cover in index.html), so without
@@ -485,4 +483,3 @@ html.platform-ios .bottomnav{
   padding-right:calc(6px + env(safe-area-inset-right));
 }
 html.platform-ios .scanner-bar{padding-top:calc(14px + env(safe-area-inset-top));}
->>>>>>> 96569eb (Add iOS app and iOS build workflow)
