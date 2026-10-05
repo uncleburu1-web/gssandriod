@@ -1,0 +1,224 @@
+name: Build iOS App
+
+# The iPhone/iPad twin of build-android.yml: runs automatically on every push
+# to main, and can also be started by hand from the Actions tab ("Run
+# workflow"). It builds the same web app, wraps it in the iOS project in
+# ios/, and produces an installable iOS build — on GitHub's own macOS
+# machines, so no Mac is needed.
+#
+# WHAT YOU GET depends on whether Apple signing secrets are set:
+#
+# 1) NO SECRETS SET (works right away, no Apple account needed)
+#    An UNSIGNED app file, gss-ios-unsigned.ipa, is attached to a GitHub
+#    Release tagged ios-vN. iPhones will not run an unsigned app directly: it
+#    has to be signed on its way onto the phone by a sideloading tool such as
+#    AltStore or Sideloadly (free Apple ID => the app must be refreshed every
+#    7 days; a paid Apple Developer account => 1 year).
+#
+# 2) SIGNING SECRETS SET (needs a paid Apple Developer account, US$99/year)
+#    The app is signed by Apple's cloud signing and uploaded straight to
+#    TestFlight (and from there it can go to the App Store). Testers install
+#    from the TestFlight app — no 7-day expiry, normal updates, just like a
+#    store app. One-time setup:
+#      a. developer.apple.com > Certificates, IDs & Profiles > Identifiers:
+#         register an App ID with Bundle ID  com.gss.benchline
+#      b. appstoreconnect.apple.com > Apps > "+" > New App, using that Bundle ID.
+#      c. appstoreconnect.apple.com > Users and Access > Integrations > App
+#         Store Connect API: create a key with the "Admin" role and download
+#         the .p8 file (Apple lets you download it only once).
+#      d. In this GitHub repo: Settings > Secrets and variables > Actions >
+#         New repository secret, add these four:
+#           GSS_IOS_TEAM_ID         your 10-character Team ID (developer.apple.com > Membership details)
+#           GSS_IOS_ASC_KEY_ID      the API key's Key ID
+#           GSS_IOS_ASC_ISSUER_ID   the Issuer ID shown above the keys list
+#           GSS_IOS_ASC_KEY_BASE64  the .p8 file, base64-encoded (on a Mac/Linux: base64 -i AuthKey_XXXX.p8)
+#
+# Release tags use an "ios-v" prefix and are never marked as the repo's
+# "latest" release, so they cannot interfere with the Android app's
+# …/releases/latest/download/gss-android.apk link or its update checker.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Needed so this workflow's own GITHUB_TOKEN is allowed to create a Release.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # Pinned (rather than macos-latest) so a GitHub image upgrade can't
+    # silently change the Xcode version under the build. Capacitor 8 needs
+    # Xcode 26 or newer, which this image provides.
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      # CocoaPods fails with a Unicode error if the locale isn't UTF-8.
+      LANG: en_US.UTF-8
+      # Same scheme as Android: every build gets its own always-increasing
+      # build number from this workflow's run number (TestFlight/App Store
+      # reject a build number that isn't higher than the previous one), and
+      # a human-readable version label "1.<run number>".
+      GSS_BUILD_NUMBER: ${{ github.run_number }}
+      GSS_VERSION_NAME: "1.${{ github.run_number }}"
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Show the Xcode version in use
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          pod --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      # package.json only lists the Android platform package. The iOS one has
+      # to be present for `cap sync ios`; it is installed here at exactly the
+      # same version as @capacitor/core so the two can never drift apart.
+      - name: Add Capacitor's iOS platform package
+        run: |
+          CAP_VERSION=$(node -p "require('./node_modules/@capacitor/core/package.json').version")
+          echo "Installing @capacitor/ios@$CAP_VERSION"
+          npm install --no-save --no-audit --no-fund "@capacitor/ios@$CAP_VERSION"
+
+      - name: Build the web app (Vite)
+        run: npm run build
+        env:
+          VITE_API_URL: https://gss-production.up.railway.app/api
+
+      # Copies the built web app into ios/ and wires the plugins in (this is
+      # also where CocoaPods installs the ML Kit barcode scanner).
+      - name: Sync into the iOS project
+        run: npx cap sync ios
+
+      - name: Show which plugins were wired into the iOS project
+        run: |
+          echo "---- ios/App/Podfile"
+          cat ios/App/Podfile
+          grep -q "CapacitorMlkitBarcodeScanning" ios/App/Podfile || { echo "::error::Barcode scanner plugin was not wired into the iOS project"; exit 1; }
+
+      # Always archive WITHOUT signing. Signing (if configured) happens at the
+      # export step below, using Apple's cloud signing — so no certificates
+      # or provisioning profiles ever have to be created by hand.
+      - name: Build the app archive
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -workspace ios/App/App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            MARKETING_VERSION="$GSS_VERSION_NAME" \
+            CURRENT_PROJECT_VERSION="$GSS_BUILD_NUMBER"
+
+      - name: Decide whether to sign
+        id: mode
+        env:
+          TEAM_ID: ${{ secrets.GSS_IOS_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.GSS_IOS_ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.GSS_IOS_ASC_ISSUER_ID }}
+          ASC_KEY_BASE64: ${{ secrets.GSS_IOS_ASC_KEY_BASE64 }}
+        run: |
+          if [ -n "$TEAM_ID" ] && [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] && [ -n "$ASC_KEY_BASE64" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Apple signing secrets found — will sign and upload to TestFlight."
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "No (or incomplete) Apple signing secrets — will produce an unsigned .ipa."
+          fi
+
+      # ---- Mode 1: unsigned .ipa on a GitHub Release -----------------------
+      - name: Package the unsigned .ipa
+        if: steps.mode.outputs.signed != 'true'
+        run: |
+          APP_PATH="$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app"
+          test -d "$APP_PATH" || { echo "::error::App.app not found inside the archive"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP_PATH" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/gss-ios-unsigned.ipa" Payload)
+          ls -lh gss-ios-unsigned.ipa
+
+      - name: Publish the release (unsigned build)
+        if: steps.mode.outputs.signed != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-v${{ github.run_number }}
+          name: "GSS iOS v1.${{ github.run_number }} (unsigned)"
+          files: gss-ios-unsigned.ipa
+          # Never take the "latest release" badge from the Android app — see
+          # the note at the top of this file.
+          make_latest: "false"
+          body: |
+            Unsigned iOS build of GSS POS. iPhones will not open this file directly —
+            install it with a sideloading tool such as AltStore or Sideloadly, which
+            signs it with your Apple ID as it installs.
+
+            For normal, expiry-free installs through TestFlight, add the Apple signing
+            secrets described at the top of `.github/workflows/build-ios.yml`.
+
+      # ---- Mode 2: signed build uploaded to TestFlight ----------------------
+      - name: Sign the app and upload it to TestFlight
+        if: steps.mode.outputs.signed == 'true'
+        env:
+          TEAM_ID: ${{ secrets.GSS_IOS_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.GSS_IOS_ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.GSS_IOS_ASC_ISSUER_ID }}
+          ASC_KEY_BASE64: ${{ secrets.GSS_IOS_ASC_KEY_BASE64 }}
+        run: |
+          set -o pipefail
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          echo "$ASC_KEY_BASE64" | base64 --decode > "$KEY_PATH"
+
+          # manageAppVersionAndBuildNumber=false keeps the build number this
+          # workflow stamped (Xcode would otherwise pick its own).
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${TEAM_ID}</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Remove the Apple API key from the runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8
+
+      - name: Write a summary
+        if: success()
+        run: |
+          {
+            echo "### iOS build 1.${{ github.run_number }} (build ${{ github.run_number }})"
+            if [ "${{ steps.mode.outputs.signed }}" = "true" ]; then
+              echo "Signed and uploaded to App Store Connect. It appears in TestFlight after Apple finishes processing it (usually 5–30 minutes)."
+            else
+              echo "Unsigned build attached to the **ios-v${{ github.run_number }}** release as \`gss-ios-unsigned.ipa\` — install with AltStore or Sideloadly."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -8,6 +8,7 @@ import {
   clearSavedPrinter,
   testPrint,
 } from '../utils/btPrinter';
+import { isIos } from '../utils/platform';
 
 export default function PrinterSetup() {
   const [devices, setDevices] = useState([]);
@@ -18,6 +19,7 @@ export default function PrinterSetup() {
   const [testResult, setTestResult] = useState('');
 
   async function loadDevices() {
+    if (isIos) { setLoading(false); return; } // no Bluetooth printers on iOS — see the info screen below
     setLoading(true);
     setError('');
     try {
@@ -67,6 +69,33 @@ export default function PrinterSetup() {
     } finally {
       setTestingAddress(null);
     }
+  }
+
+  if (isIos) {
+    // iOS doesn't allow apps to connect to ordinary Bluetooth thermal
+    // printers, so there is nothing to pair or select here. Receipts and
+    // reports open in the iOS share sheet instead (see utils/receiptPdf.js).
+    return (
+      <>
+        <div className="topbar">
+          <div>
+            <div className="page-title">Printing</div>
+            <div className="page-sub">How receipts print on iPhone and iPad</div>
+          </div>
+        </div>
+
+        <div className="section">
+          <div className="section-head"><h3>Printing from iPhone / iPad</h3></div>
+          <div className="section-body" style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.7 }}>
+            Apple doesn't allow apps to connect to ordinary Bluetooth thermal printers, so there is nothing to pair on this device.
+            Instead, when a sale is completed — or when you tap the print button on a past sale — the receipt opens as a PDF in the iOS share sheet:<br />
+            1. Tap <strong>Print</strong> to send it to any AirPrint printer on your Wi‑Fi.<br />
+            2. Or choose <strong>Save to Files</strong>, WhatsApp or Mail to keep it or send it to your customer.<br />
+            Reports export the same way.
+          </div>
+        </div>
+      </>
+    );
   }
 
   return (

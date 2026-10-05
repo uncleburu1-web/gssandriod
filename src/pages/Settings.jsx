@@ -4,6 +4,7 @@ import { App } from '@capacitor/app';
 import { useAuth } from '../context/AuthContext';
 import { auth as authApi, branches as branchesApi, devices as devicesApi, subscription as subscriptionApi, controlCenter as controlCenterApi } from '../api/endpoints';
 import { checkForUpdate } from '../utils/appUpdate';
+import { isIos } from '../utils/platform';
 import { Icons } from '../components/Icons';
 
 function extractError(err, fallback) {
@@ -88,9 +89,17 @@ function AppUpdateSection() {
         <div className="field-hint" style={{ marginBottom: 10 }}>
           {version ? `You're running version ${version}.` : 'Checking installed version…'}
         </div>
-        <button className="btn small" onClick={handleCheck} disabled={checking}>
-          {Icons.device} {checking ? 'Checking…' : 'Check for updates'}
-        </button>
+        {isIos ? (
+          // Android downloads its update straight from GitHub; iOS can't do
+          // that — new builds arrive through TestFlight / the App Store.
+          <div className="field-hint">
+            Updates on iPhone and iPad are installed through TestFlight or the App Store — open it to get the newest version.
+          </div>
+        ) : (
+          <button className="btn small" onClick={handleCheck} disabled={checking}>
+            {Icons.device} {checking ? 'Checking…' : 'Check for updates'}
+          </button>
+        )}
         {message && <div className="field-hint" style={{ marginTop: 10 }}>{message}</div>}
       </div>
     </div>

@@ -18,6 +18,16 @@ const GS = 0x1d;
 export class ReceiptBuilder {
   constructor() {
     this.bytes = [];
+    // A readable twin of `bytes`: every line/blank added below is also
+    // recorded here as plain text plus its alignment/bold/size. The ESC/POS
+    // bytes are what a Bluetooth thermal printer (Android) needs; this
+    // record lets iOS — which can't talk to those printers — render the
+    // exact same receipt as a PDF (see receiptPdf.js) without a second copy
+    // of the receipt layout. It never affects `bytes`.
+    this.entries = [];
+    this._align = 0;
+    this._bold = false;
+    this._big = false;
     this._push(ESC, 0x40); // ESC @ — initialize printer (reset any leftover state)
   }
 
@@ -37,31 +47,46 @@ export class ReceiptBuilder {
     }
   }
 
+  _record(text) {
+    this.entries.push({
+      kind: 'line',
+      text: String(text ?? '').replace(/₦/g, 'N'),
+      align: this._align,
+      bold: this._bold,
+      big: this._big,
+    });
+  }
+
   line(str = '') {
     this._text(str);
     this._push(0x0a); // LF
+    this._record(str);
     return this;
   }
 
   blank(n = 1) {
     for (let i = 0; i < n; i++) this._push(0x0a);
+    this.entries.push({ kind: 'blank', count: n });
     return this;
   }
 
   align(pos) {
     // 0 = left, 1 = center, 2 = right
     this._push(ESC, 0x61, pos);
+    this._align = pos;
     return this;
   }
 
   bold(on) {
     this._push(ESC, 0x45, on ? 1 : 0);
+    this._bold = !!on;
     return this;
   }
 
   doubleSize(on) {
     // GS ! — width/height multiplier. 0x11 = double both, 0x00 = normal.
     this._push(GS, 0x21, on ? 0x11 : 0x00);
+    this._big = !!on;
     return this;
   }
 
@@ -76,6 +101,7 @@ export class ReceiptBuilder {
     const padding = Math.max(1, width - l.length - v.length);
     this._text(l + ' '.repeat(padding) + v);
     this._push(0x0a);
+    this._record(l + ' '.repeat(padding) + v);
     return this;
   }
 

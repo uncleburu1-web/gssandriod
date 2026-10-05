@@ -460,3 +460,29 @@ body.scanner-active{
 }
 .scanner-feedback{position:absolute;top:12%;left:16px;right:16px;text-align:center;z-index:1;}
 .scanner-feedback .banner{display:inline-flex;}
+<<<<<<< HEAD
+=======
+
+/* ---------- iPhone / iPad (Capacitor iOS) ----------
+   The page runs edge-to-edge (viewport-fit=cover in index.html), so without
+   these the status bar / notch / Dynamic Island — and the side cut-outs in
+   landscape — would sit on top of the app's content. Android and the browser
+   never get the `platform-ios` class (see main.jsx), so they are unaffected.
+   The bottom nav already accounts for the home-indicator inset above. */
+html.platform-ios .app-shell{
+  padding-top:env(safe-area-inset-top);
+  padding-left:env(safe-area-inset-left);
+  padding-right:env(safe-area-inset-right);
+}
+html.platform-ios .login-screen{
+  padding-top:calc(20px + env(safe-area-inset-top));
+  padding-left:calc(20px + env(safe-area-inset-left));
+  padding-right:calc(20px + env(safe-area-inset-right));
+}
+html.platform-ios .cart-panel{top:env(safe-area-inset-top);}
+html.platform-ios .bottomnav{
+  padding-left:calc(6px + env(safe-area-inset-left));
+  padding-right:calc(6px + env(safe-area-inset-right));
+}
+html.platform-ios .scanner-bar{padding-top:calc(14px + env(safe-area-inset-top));}
+>>>>>>> 96569eb (Add iOS app and iOS build workflow)

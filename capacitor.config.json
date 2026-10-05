@@ -1,5 +1,13 @@
 {
   "appId": "com.gss.benchline",
   "appName": "GSS POS",
-  "webDir": "dist"
+  "webDir": "dist",
+  "ios": {
+    "includePlugins": [
+      "@capacitor/app",
+      "@capacitor/filesystem",
+      "@capacitor/share",
+      "@capacitor-mlkit/barcode-scanning"
+    ]
+  }
 }

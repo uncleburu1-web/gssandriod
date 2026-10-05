@@ -1,5 +1,7 @@
 import { buildReceiptEscPos } from './escpos';
 import { printToSavedPrinter, isAvailable, getSavedPrinterAddress } from './btPrinter';
+import { shareReceiptPdf } from './receiptPdf';
+import { isIos } from './platform';
 
 // Falls back to these only if the caller doesn't pass real shop info —
 // callers (Sales.jsx) pass the logged-in user's own shop details instead,
@@ -21,11 +23,34 @@ const DEFAULT_SHOP = {
  * logo image the way the web invoice can (see utils/receipt.js there) —
  * shopInput.logoUrl is accepted for consistency but simply isn't used here.
  *
- * This ONLY works inside the installed Android app (where the Bluetooth
+ * On Android this ONLY works inside the installed app (where the Bluetooth
  * Serial plugin actually exists) — calling it from a regular browser tab
  * throws a clear error instead of silently doing nothing.
+ *
+ * On iPhone/iPad there is no Bluetooth-printer path (iOS doesn't allow it),
+ * so the same receipt is shown as a PDF in the iOS share sheet instead —
+ * tap Print there to use any AirPrint printer (see receiptPdf.js).
  */
 export async function printSaleReceipt(sale, shopInput = {}, extra = {}) {
+  const SHOP = {
+    name: shopInput.name || DEFAULT_SHOP.name,
+    addressLines: shopInput.addressLines || (shopInput.address ? [shopInput.address] : DEFAULT_SHOP.addressLines),
+    phones: shopInput.phones || (shopInput.phone ? [shopInput.phone] : DEFAULT_SHOP.phones),
+    email: shopInput.email || DEFAULT_SHOP.email,
+  };
+
+  if (isIos) {
+    try {
+      const builder = buildReceiptEscPos(sale, SHOP, { ...extra, footerNote: shopInput.footerNote });
+      await shareReceiptPdf(builder, sale);
+    } catch (err) {
+      // Dismissing the share sheet without choosing anything is not an error.
+      if (/cancel/i.test(String(err?.message || err))) return;
+      alert(`Could not open the receipt: ${err.message || err}`);
+    }
+    return;
+  }
+
   if (!isAvailable()) {
     alert('Receipt printing only works in the installed app, not in a browser.');
     return;
@@ -34,12 +59,6 @@ export async function printSaleReceipt(sale, shopInput = {}, extra = {}) {
     alert('No printer set up yet.\n\nGo to the Printer Setup page, pick your Bluetooth printer, and try again.');
     return;
   }
-  const SHOP = {
-    name: shopInput.name || DEFAULT_SHOP.name,
-    addressLines: shopInput.addressLines || (shopInput.address ? [shopInput.address] : DEFAULT_SHOP.addressLines),
-    phones: shopInput.phones || (shopInput.phone ? [shopInput.phone] : DEFAULT_SHOP.phones),
-    email: shopInput.email || DEFAULT_SHOP.email,
-  };
   try {
     const builder = buildReceiptEscPos(sale, SHOP, { ...extra, footerNote: shopInput.footerNote });
     await printToSavedPrinter(builder);

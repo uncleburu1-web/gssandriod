@@ -1,4 +1,5 @@
 import { App } from '@capacitor/app';
+import { isIos } from './platform';
 
 const RELEASES_API = 'https://api.github.com/repos/uncleburu1-web/gssandriod/releases/latest';
 
@@ -21,6 +22,11 @@ function parseVersionCode(tagName) {
  * { available: true, version, downloadUrl } when a newer build exists.
  */
 export async function checkForUpdate() {
+  // The self-update path below downloads an Android APK from GitHub
+  // Releases — iOS can't install apps that way. iPhone/iPad builds are
+  // updated through TestFlight / the App Store instead, so there is
+  // nothing to check or offer here.
+  if (isIos) return { available: false, unsupported: true };
   try {
     const info = await App.getInfo();
     const installedCode = parseInt(info.build, 10);
