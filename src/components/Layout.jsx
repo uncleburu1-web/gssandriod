@@ -95,10 +95,14 @@ export default function Layout() {
             {isOwner ? 'Owner' : 'Seller'}
           </div>
           <div className={`live-indicator ${liveStatus === 'open' ? 'live' : ''}`} title={
-            liveStatus === 'open' ? 'Live — sales and stock changes appear instantly' : 'Reconnecting…'
+            liveStatus === 'open'
+              ? 'Live — sales and stock changes appear instantly'
+              : liveStatus === 'connecting'
+                ? 'Connecting to live updates…'
+                : 'Live updates disconnected — reconnecting. Sales still require an internet connection to save.'
           }>
             <span className="dot" />
-            {liveStatus === 'open' ? 'Live' : 'Reconnecting…'}
+            {liveStatus === 'open' ? 'Live' : liveStatus === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
           </div>
           <button
             className="btn ghost small"
