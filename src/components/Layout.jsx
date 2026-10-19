@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Link } from 'react-router-dom';
+import { NavLink, Outlet, Link, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { subscription, branches as branchesApi } from '../api/endpoints';
 import { checkForUpdate } from '../utils/appUpdate';
 import { Icons } from './Icons';
+import SubscriptionEndedCard from './SubscriptionEndedCard';
 
 const BASE_NAV_ITEMS = [
   { to: '/', label: 'Dashboard', mobileLabel: 'Home', icon: Icons.dashboard, end: true },
@@ -34,6 +35,7 @@ const LIVE_STATUS_TITLE = {
 
 const SALES_NAV_ITEM = { to: '/sales', label: 'Sales', mobileLabel: 'Sales', icon: Icons.sales };
 const ATTENDANCE_NAV_ITEM = { to: '/attendance', label: 'Attendance', mobileLabel: 'Attend', icon: Icons.workers };
+const SHIFTS_NAV_ITEM = { to: '/shifts', label: 'Shifts', mobileLabel: 'Shifts', icon: Icons.reports };
 
 const PRINTER_NAV_ITEM = { to: '/printer-setup', label: 'Printer', mobileLabel: 'Printer', icon: Icons.printer };
 const SETTINGS_NAV_ITEM = { to: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Icons.settings };
@@ -84,8 +86,8 @@ export default function Layout() {
   // entirely by what the owner picked at signup (Organization.business_type
   // on the backend).
   const coreItems = serviceEnabled
-    ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM]
-    : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM];
+    ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, SHIFTS_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM]
+    : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, SHIFTS_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM];
   // Settings is always reachable (every logged-in user has an account and
   // a log-out button) — what's INSIDE it (password changes, paired
   // devices, the Control Center) is what's actually restricted to
@@ -93,14 +95,25 @@ export default function Layout() {
   const items = [
     ...coreItems,
     ...(isOwner ? OWNER_NAV_ITEMS : []),
+    ...(isOwner ? [{ to: '/audit', label: 'Audit log', mobileLabel: 'Audit', icon: Icons.reports }] : []),
     ...(isCeo ? CEO_NAV_ITEMS : []),
     SETTINGS_NAV_ITEM,
   ];
 
   const [sub, setSub] = useState(null);
+  const [subCheck, setSubCheck] = useState(0);
   useEffect(() => {
     subscription.status().then(({ data }) => setSub(data)).catch(() => {});
-  }, [versions.subscription]);
+  }, [versions.subscription, subCheck]);
+  // Any request refused with 402 (the subscription ended mid-session) re-checks the status at once.
+  useEffect(() => {
+    const recheck = () => setSubCheck((n) => n + 1);
+    window.addEventListener('benchline:subscription-ended', recheck);
+    return () => window.removeEventListener('benchline:subscription-ended', recheck);
+  }, []);
+  const location = useLocation();
+  const subscriptionEnded = Boolean(sub && !sub.cloud_services_enabled);
+  const onBilling = location.pathname.startsWith('/billing');
 
   // Only relevant for a CEO running more than one branch — everyone else
   // has exactly one branch and the backend scopes every request to it
@@ -186,15 +199,14 @@ export default function Layout() {
             </div>
           );
         })()}
-        {sub && !sub.cloud_services_enabled && (
+        {subscriptionEnded && isCeo && onBilling && (
           <div className="banner warn" style={{ marginBottom: 18 }}>
-            {sub.effective_status === 'expired'
-              ? 'Subscription expired — cloud sync and the CEO app are paused. Selling on this desktop still works normally.'
-              : "Subscription in its grace period — renew soon to keep cloud sync running."}
-            {isCeo && <Link to="/billing" style={{ marginLeft: 'auto', fontWeight: 700 }}>Subscribe →</Link>}
+            {sub.status === 'trial' ? 'Your free trial has ended.' : 'Your subscription has ended.'} Choose a plan below to turn Benchline online back on.
           </div>
         )}
-        <Outlet />
+        {subscriptionEnded && !(isCeo && onBilling)
+          ? <SubscriptionEndedCard sub={sub} isCeo={isCeo} onLogout={logout} />
+          : <Outlet />}
       </main>
 
       <button className="theme-toggle-fab" onClick={toggleTheme} aria-label="Toggle theme">
