@@ -34,6 +34,7 @@ const LIVE_STATUS_TITLE = {
 
 const SALES_NAV_ITEM = { to: '/sales', label: 'Sales', mobileLabel: 'Sales', icon: Icons.sales };
 const ATTENDANCE_NAV_ITEM = { to: '/attendance', label: 'Attendance', mobileLabel: 'Attend', icon: Icons.workers };
+const SHIFTS_NAV_ITEM = { to: '/shifts', label: 'Shifts', mobileLabel: 'Shifts', icon: Icons.reports };
 
 const PRINTER_NAV_ITEM = { to: '/printer-setup', label: 'Printer', mobileLabel: 'Printer', icon: Icons.printer };
 const SETTINGS_NAV_ITEM = { to: '/settings', label: 'Settings', mobileLabel: 'Settings', icon: Icons.settings };
@@ -84,8 +85,8 @@ export default function Layout() {
   // entirely by what the owner picked at signup (Organization.business_type
   // on the backend).
   const coreItems = serviceEnabled
-    ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM]
-    : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM];
+    ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, SHIFTS_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM]
+    : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, SHIFTS_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM];
   // Settings is always reachable (every logged-in user has an account and
   // a log-out button) — what's INSIDE it (password changes, paired
   // devices, the Control Center) is what's actually restricted to
