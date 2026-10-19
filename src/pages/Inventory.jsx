@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLive } from '../context/LiveContext';
 import { money, fmtDate, apiErrorMessage } from '../utils/format';
 import { Icons } from '../components/Icons';
+import StockLedgerPanel from '../components/StockLedgerPanel';
 import { scanBarcode } from '../utils/barcodeScanner';
 
 // Full label map for every category code that has ever existed (matches
@@ -452,6 +453,7 @@ export default function Inventory() {
                           </table>
                         </div>
                       )}
+                      <StockLedgerPanel item={i} detail={expandedDetail} isOwner={isOwner} onChanged={() => refreshExpanded(i.id)} />
                     </div>
                   )}
                 </div>
