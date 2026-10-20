@@ -97,6 +97,7 @@ export default function Layout() {
     ...coreItems,
     ...(isOwner ? OWNER_NAV_ITEMS : []),
     ...(isOwner ? [{ to: '/audit', label: 'Audit log', mobileLabel: 'Audit', icon: Icons.reports }] : []),
+    ...(isOwner ? [{ to: '/promotions', label: 'Promotions', mobileLabel: 'Promos', icon: Icons.billing }] : []),
     ...(isCeo ? CEO_NAV_ITEMS : canPay ? CEO_NAV_ITEMS.filter((i) => /billing/.test(i.to)) : []),
     SETTINGS_NAV_ITEM,
   ];
