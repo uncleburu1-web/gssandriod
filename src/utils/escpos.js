@@ -1,3 +1,4 @@
+import { methodLabel } from './format';
 /**
  * Minimal ESC/POS command encoder.
  *
@@ -163,9 +164,7 @@ export function buildReceiptEscPos(sale, shop, { cashReceived, change, footerNot
   r.bold(true).row('TOTAL INVOICE', money(sale.total), WIDTH).bold(false);
 
   r.divider();
-  const paymentLabel = sale.payment_method === 'pos'
-    ? 'POS/Card'
-    : (sale.payment_method || 'cash')[0].toUpperCase() + (sale.payment_method || 'cash').slice(1);
+  const paymentLabel = methodLabel(sale.payment_method || 'cash');
   r.row(`Payment (${paymentLabel})`, money(sale.total), WIDTH);
   if (sale.payment_method === 'cash' && cashReceived != null) {
     r.row('Received', money(cashReceived), WIDTH);

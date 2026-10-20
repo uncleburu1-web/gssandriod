@@ -160,7 +160,7 @@ const TABLE_TABS = {
   },
   'payment-method': {
     head: ['Method', 'Sales', 'Total'],
-    rows: (d) => d.rows.map((r) => [{ cash: 'Cash', transfer: 'Transfer', pos: 'POS/Card' }[r.payment_method] || r.payment_method, r.count, pdfMoney(r.total)]),
+    rows: (d) => d.rows.map((r) => [{ cash: 'Cash', transfer: 'Transfer', pos: 'POS/Card', mobile: 'Mobile money' }[r.payment_method] || r.payment_method, r.count, pdfMoney(r.total)]),
   },
   'by-customer': {
     head: ['Customer', 'Number of sales', 'Total spent', 'Outstanding balance'],
