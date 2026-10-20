@@ -53,6 +53,7 @@ const OWNER_NAV_ITEMS = [
 // by every branch) — a branch manager's "owner within my branch"
 // authority deliberately doesn't extend to it, so this is CEO-only.
 const CEO_NAV_ITEMS = [
+  { to: '/transfers', label: 'Move stock', mobileLabel: 'Move', icon: Icons.inventory },
   { to: '/billing', label: 'Billing', mobileLabel: 'Billing', icon: Icons.billing },
 ];
 

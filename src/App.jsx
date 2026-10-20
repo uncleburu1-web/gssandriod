@@ -19,6 +19,7 @@ import Workers from './pages/Workers';
 import Attendance from './pages/Attendance';
 import Shifts from './pages/Shifts';
 import AuditLog from './pages/AuditLog';
+import Transfers from './pages/Transfers';
 import Billing from './pages/Billing';
 import PrinterSetup from './pages/PrinterSetup';
 import Settings from './pages/Settings';
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="attendance" element={<Attendance />} />
             <Route path="shifts" element={<Shifts />} />
             <Route path="audit" element={<AuditLog />} />
+            <Route path="transfers" element={<RequireCeo><Transfers /></RequireCeo>} />
             <Route path="billing" element={<RequireCanPay><Billing /></RequireCanPay>} />
             <Route path="printer-setup" element={<PrinterSetup />} />
             <Route path="settings" element={<Settings />} />
