@@ -53,6 +53,7 @@ const OWNER_NAV_ITEMS = [
 // by every branch) — a branch manager's "owner within my branch"
 // authority deliberately doesn't extend to it, so this is CEO-only.
 const CEO_NAV_ITEMS = [
+  { to: '/transfers', label: 'Move stock', mobileLabel: 'Move', icon: Icons.inventory },
   { to: '/billing', label: 'Billing', mobileLabel: 'Billing', icon: Icons.billing },
 ];
 
@@ -96,6 +97,7 @@ export default function Layout() {
     ...coreItems,
     ...(isOwner ? OWNER_NAV_ITEMS : []),
     ...(isOwner ? [{ to: '/audit', label: 'Audit log', mobileLabel: 'Audit', icon: Icons.reports }] : []),
+    ...(isOwner ? [{ to: '/promotions', label: 'Promotions', mobileLabel: 'Promos', icon: Icons.billing }] : []),
     ...(isCeo ? CEO_NAV_ITEMS : canPay ? CEO_NAV_ITEMS.filter((i) => /billing/.test(i.to)) : []),
     SETTINGS_NAV_ITEM,
   ];
