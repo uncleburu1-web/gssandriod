@@ -5,6 +5,7 @@ import { useLive } from '../context/LiveContext';
 import { useAuth } from '../context/AuthContext';
 import { money, fmtDate, apiErrorMessage, PAYMENT_METHODS, methodLabel } from '../utils/format';
 import Amount from '../components/Amount';
+import ReturnModal from '../components/ReturnModal';
 import { printSaleReceipt } from '../utils/receipt';
 import { Icons } from '../components/Icons';
 import { startContinuousScan, stopContinuousScan } from '../utils/barcodeScanner';
@@ -575,6 +576,7 @@ function SalesHistory({ tab }) {
   useEffect(() => { payKey.current = null; }, [payModal, payAmount]);
 
   const [replaceModal, setReplaceModal] = useState(null);
+  const [returnSale, setReturnSale] = useState(null);
   const [replaceLine, setReplaceLine] = useState('');
   const [replaceForm, setReplaceForm] = useState({ item: '', variant: '', item_name: '', quantity: 1, unit_price: 0, unit_cost: 0 });
   const [replaceVariants, setReplaceVariants] = useState([]);
@@ -722,6 +724,9 @@ function SalesHistory({ tab }) {
                       {tab === 'outstanding' && (
                         <button className="btn small" onClick={() => openPay(s)}>Pay</button>
                       )}
+                      {tab === 'completed' && capabilities.process_return && (
+                        <button className="btn ghost small" onClick={() => setReturnSale(s)} title="Return items">Return</button>
+                      )}
                       {capabilities.delete_sale && (
                         <button className="btn ghost small" onClick={() => handleDelete(s.id)} title="Delete">{Icons.trash}</button>
                       )}
@@ -733,6 +738,10 @@ function SalesHistory({ tab }) {
           </div>
         )}
       </div>
+
+      {returnSale && (
+        <ReturnModal sale={returnSale} onClose={() => setReturnSale(null)} onDone={() => { setReturnSale(null); load(); }} />
+      )}
 
       {payModal && (
         <div className="modal-backdrop" onClick={() => setPayModal(null)}>
