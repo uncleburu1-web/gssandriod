@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import RequireAuth from './components/RequireAuth';
 import RequireOwner from './components/RequireOwner';
 import RequireCeo from './components/RequireCeo';
+import RequireCanPay from './components/RequireCanPay';
 import RequireService from './components/RequireService';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -48,7 +49,7 @@ export default function App() {
             <Route path="attendance" element={<Attendance />} />
             <Route path="shifts" element={<Shifts />} />
             <Route path="audit" element={<AuditLog />} />
-            <Route path="billing" element={<RequireCeo><Billing /></RequireCeo>} />
+            <Route path="billing" element={<RequireCanPay><Billing /></RequireCanPay>} />
             <Route path="printer-setup" element={<PrinterSetup />} />
             <Route path="settings" element={<Settings />} />
           </Route>
