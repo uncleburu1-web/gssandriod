@@ -155,7 +155,7 @@ export function buildReceiptEscPos(sale, shop, { cashReceived, change, footerNot
   r.divider();
   items.forEach((item) => {
     r.line(item.item_name);
-    r.row(`${item.quantity} x ${money(item.unit_price)}`, money(item.total), WIDTH);
+    r.row(Number(item.quantity) % 1 ? `${Number(item.quantity).toFixed(3)}kg x ${money(item.unit_price)}/kg` : `${item.quantity} x ${money(item.unit_price)}`, money(item.total), WIDTH);
   });
 
   r.divider();
