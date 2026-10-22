@@ -12,7 +12,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const { versions } = useLive();
-  const { serviceEnabled, pharmacyEnabled } = useAuth();
+  const { serviceEnabled, pharmacyEnabled, restaurantEnabled, isOwner } = useAuth();
 
   useEffect(() => {
     let mounted = true;
@@ -65,6 +65,13 @@ export default function Dashboard() {
           <div className="page-sub">Today at a glance</div>
         </div>
       </div>
+
+      {restaurantEnabled && isOwner && (
+        // The phone has no restaurant screens yet: the set-up is on the web, orders on the hub till.
+        <div className="banner" data-restaurant-note style={{ marginBottom: 16 }}>
+          This branch is a restaurant. Set up its menu, tables and kitchen on the web (pos.gssolu.com → Restaurant); orders are taken on the hub till.
+        </div>
+      )}
 
       <div className="hero-card" style={{ marginBottom: 16 }}>
         <div className="stat-label">
