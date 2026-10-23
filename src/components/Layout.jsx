@@ -64,7 +64,7 @@ const STAFF_ROLE_LABEL = {
 };
 
 export default function Layout() {
-  const { user, logout, isOwner, isCeo, canPay, shopName, serviceEnabled } = useAuth();
+  const { user, logout, isOwner, isCeo, canPay, shopName, serviceEnabled, restaurantEnabled, allBranchesView, allRestaurant } = useAuth();
   const { status: liveStatus, versions } = useLive();
   const { theme, toggleTheme } = useTheme();
 
@@ -86,9 +86,16 @@ export default function Layout() {
   // the tab at all, rather than seeing an empty/irrelevant section. Driven
   // entirely by what the owner picked at signup (Organization.business_type
   // on the backend).
-  const coreItems = serviceEnabled
-    ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, SHIFTS_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM]
-    : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, SHIFTS_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM];
+  // A restaurant branch (or "All branches" when every branch is a restaurant): orders are taken on
+  // the hub till and finished ones are in Reports, so no shop selling screen, no repairs and no shop
+  // promotions; stock is the restaurant's drinks and ingredients. Its menu, tables and kitchen are set
+  // up on the web.
+  const restaurantNav = restaurantEnabled || (allBranchesView && allRestaurant);
+  const coreItems = restaurantNav
+    ? [BASE_NAV_ITEMS[0], { ...BASE_NAV_ITEMS[1], label: 'Stock' }, SHIFTS_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM]
+    : serviceEnabled
+      ? [...BASE_NAV_ITEMS, SERVICE_NAV_ITEM, SALES_NAV_ITEM, SHIFTS_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM]
+      : [...BASE_NAV_ITEMS, SALES_NAV_ITEM, SHIFTS_NAV_ITEM, ATTENDANCE_NAV_ITEM, PRINTER_NAV_ITEM];
   // Settings is always reachable (every logged-in user has an account and
   // a log-out button) — what's INSIDE it (password changes, paired
   // devices, the Control Center) is what's actually restricted to
@@ -97,7 +104,7 @@ export default function Layout() {
     ...coreItems,
     ...(isOwner ? OWNER_NAV_ITEMS : []),
     ...(isOwner ? [{ to: '/audit', label: 'Audit log', mobileLabel: 'Audit', icon: Icons.reports }] : []),
-    ...(isOwner ? [{ to: '/promotions', label: 'Promotions', mobileLabel: 'Promos', icon: Icons.billing }] : []),
+    ...(isOwner && !restaurantNav ? [{ to: '/promotions', label: 'Promotions', mobileLabel: 'Promos', icon: Icons.billing }] : []),
     ...(isCeo ? CEO_NAV_ITEMS : canPay ? CEO_NAV_ITEMS.filter((i) => /billing/.test(i.to)) : []),
     SETTINGS_NAV_ITEM,
   ];

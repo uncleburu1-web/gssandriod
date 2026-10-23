@@ -116,6 +116,11 @@ function branchView(user) {
     // [{ value, label }, ...] for the stock category picker, for this kind of shop.
     availableCategories: (viewedType && typeInfo[viewedType]?.categories) || user?.available_categories || [],
     restaurantEnabled: modules.includes('restaurant'),
+    // Every branch is a restaurant: "All branches" shows the restaurant sidebar too.
+    allRestaurant: Object.keys(map).length > 0 && Object.values(map).every((m) => m.includes('restaurant')),
+    allBranchesView,
+    // The worker roles this kind of shop offers ([{ value, label }]; gss core.modules.TYPE_ROLES).
+    roleChoices: typeInfo[businessType]?.roles || null,
   };
 }
 
