@@ -150,3 +150,10 @@ export const reports = {
   netWorth: () => client.get('/reports/net-worth/'),
 };
 
+// ---- Restaurant takings (branches with the restaurant module; gss restaurant/urls.py) ---------------
+// The phone shows a restaurant's takings and finished orders; its set-up is on the web.
+export const restaurant = {
+  summary: (params) => client.get('/reports/restaurant/summary/', { params }),
+  orders: (params) => client.get('/restaurant/orders/', { params }),
+  order: (id) => client.get(`/restaurant/orders/${id}/`),
+};

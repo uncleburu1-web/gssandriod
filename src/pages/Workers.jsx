@@ -2,18 +2,28 @@ import { useEffect, useState } from 'react';
 import { workers as workersApi } from '../api/endpoints';
 import { money, fmtDate } from '../utils/format';
 import { Icons } from '../components/Icons';
+import { useAuth } from '../context/AuthContext';
 
 const ROLE_LABEL = {
   owner: 'Owner / Admin', branch_manager: 'Branch manager', seller: 'Seller',
   reception: 'Receptionist', technician: 'Service technician',
-  attendant: 'Shop attendant', other: 'Other',
+  attendant: 'Shop attendant', waiter: 'Waiter', cashier: 'Cashier', kitchen: 'Kitchen staff', other: 'Other',
 };
 
 // A branch manager is assigned from Settings → Branches, not here (see
 // BranchesSection); 'owner' only exists from signup. Neither belongs in
 // this create/edit dropdown, even though both need a label above for
 // whoever the Workers list is showing.
-const ASSIGNABLE_ROLES = Object.entries(ROLE_LABEL).filter(([v]) => v !== 'owner' && v !== 'branch_manager');
+//
+// Which roles are offered follows the kind of shop the branch is (gss core.modules.TYPE_ROLES, sent
+// in /me's shop_types): a restaurant hires waiters, cashiers and kitchen staff; a shop hires sellers,
+// receptionists, technicians and attendants. The fallbacks are for a server that does not send them.
+const SHOP_ROLES = ['seller', 'reception', 'technician', 'attendant', 'other'];
+const RESTAURANT_ROLES = ['waiter', 'cashier', 'kitchen', 'other'];
+function assignableRoles(roleChoices, restaurantEnabled) {
+  const values = roleChoices ? roleChoices.map((r) => r.value) : restaurantEnabled ? RESTAURANT_ROLES : SHOP_ROLES;
+  return values.map((v) => [v, ROLE_LABEL[v] || v]);
+}
 
 const emptyForm = {
   full_name: '', role: 'seller', phone: '', salary: '', hire_date: '',
@@ -21,6 +31,8 @@ const emptyForm = {
 };
 
 export default function Workers() {
+  const { roleChoices, restaurantEnabled } = useAuth();
+  const ASSIGNABLE_ROLES = assignableRoles(roleChoices, restaurantEnabled);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -39,7 +51,7 @@ export default function Workers() {
 
   function openAdd() {
     setEditing(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, role: ASSIGNABLE_ROLES[0][0] });
     setError('');
     setModalOpen(true);
   }
@@ -100,7 +112,7 @@ export default function Workers() {
       <div className="topbar">
         <div>
           <div className="page-title">Workers</div>
-          <div className="page-sub">Sellers who can log in and sell, plus your general staff roster</div>
+          <div className="page-sub">{restaurantEnabled ? 'Waiters, cashiers and kitchen staff who sign in on the hub till, plus your staff roster' : 'Sellers who can log in and sell, plus your general staff roster'}</div>
         </div>
       </div>
 
@@ -161,8 +173,10 @@ export default function Workers() {
               <div className="field-row">
                 <div className="field">
                   <label>Role</label>
-                  <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                    {ASSIGNABLE_ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  <select aria-label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                    {/* Someone already in another role (hired before the branch changed kind) keeps it on show. */}
+                    {(ASSIGNABLE_ROLES.some(([v]) => v === form.role) ? ASSIGNABLE_ROLES : [[form.role, ROLE_LABEL[form.role] || form.role], ...ASSIGNABLE_ROLES])
+                      .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                 </div>
                 <div className="field">
@@ -187,7 +201,7 @@ export default function Workers() {
                   disabled={editing?.can_login}
                   onChange={(e) => setForm({ ...form, give_login: e.target.checked })}
                 />
-                <label style={{ margin: 0 }}>Give this worker a system login (so they can sell)</label>
+                <label style={{ margin: 0 }}>{restaurantEnabled ? 'Give this worker a login (so they can sign in on the hub till)' : 'Give this worker a system login (so they can sell)'}</label>
               </div>
 
               {form.give_login && (

@@ -6,8 +6,10 @@
 //   - sees each branch's kind in Settings, turns Lekki back into general retail and then into a
 //     restaurant again, with a warning each time;
 //   - adds a pharmacy branch (on a paid plan; the trial allows one branch);
-//   - viewing a restaurant branch: the dashboard says where its set-up is, and stock categories are
-//     a restaurant's.
+//   - viewing the pharmacy: the shop sidebar and shop roles;
+//   - viewing a restaurant branch: no shop selling, repairs or promotions in the sidebar, restaurant
+//     roles in Workers, Reports opening on the restaurant's takings, the dashboard saying where its
+//     set-up is, and a restaurant's stock categories.
 //
 //   PLAYWRIGHT_MODULE=<playwright-core> E2E_CHROMIUM=<chrome> E2E_PHONE=http://localhost:3000 \
 //   E2E_PSQL='su postgres -c "psql -d <db> -tAc' node test/ui/shop-type.e2e.cjs
@@ -67,8 +69,32 @@ const modulesOf = (name) => sql(`SELECT string_agg(m.module, ',' ORDER BY m.modu
     check('E2E Ikeja is a pharmacy branch (retail only)', await eventually(async () => (await page.textContent('tr:has-text("E2E Ikeja")')).includes('Pharmacy'))
       && sql("SELECT shop_type FROM core_shop WHERE name = 'E2E Ikeja'") === 'pharmacy' && modulesOf('E2E Ikeja') === 'retail');
 
+    const nav = async () => (await page.$$eval('.sidebar .navitem', (as) => as.map((a) => a.textContent.trim()))).join(',');
+    const roles = async () => {
+      await page.goto(`${APP}/workers`);
+      await page.click('button:has-text("Add worker")');
+      return (await page.$$eval('.modal select[aria-label="Role"] option', (os) => os.map((o) => o.textContent))).join(',');
+    };
+
+    // ---- viewing the pharmacy: a shop ----------------------------------------------------------------
+    const ikeja = sql("SELECT id FROM core_shop WHERE name = 'E2E Ikeja'");
+    await page.evaluate((id) => localStorage.setItem('current_branch_id', id), ikeja);
+    await page.goto(`${APP}/`);
+    check('the pharmacy has the shop sidebar (Sales, Promotions)', await eventually(async () => /Sales/.test(await nav()) && /Promotions/.test(await nav())), await nav());
+    const shopRoles = await roles();
+    check('…and shop roles in Workers', shopRoles === 'Seller,Receptionist,Service technician,Shop attendant,Other', shopRoles);
+
     // ---- viewing the restaurant branch -----------------------------------------------------------
     await page.evaluate((id) => localStorage.setItem('current_branch_id', id), lekki);
+    await page.goto(`${APP}/`);
+    check('the restaurant branch has no shop selling, repairs or promotions; its stock is "Stock"', await eventually(async () => {
+      const n = await nav();
+      return n.includes('Stock') && !/Sales|Service|Promotions/.test(n);
+    }), await nav());
+    const restaurantRoles = await roles();
+    check('…restaurant roles in Workers', restaurantRoles === 'Waiter,Cashier,Kitchen staff,Other', restaurantRoles);
+    await page.goto(`${APP}/reports`);
+    check('…and Reports opens on the restaurant\'s takings', await eventually(async () => (await page.isVisible('.report-nav button.active:has-text("Restaurant takings")')) && page.isVisible('[data-takings]')));
     await page.goto(`${APP}/`);
     check('the dashboard says where a restaurant branch is set up', await eventually(async () => (await page.textContent('[data-restaurant-note]')).includes('on the web')));
     await page.goto(`${APP}/inventory`);
